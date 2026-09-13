@@ -1,6 +1,6 @@
 {
   "name": "@plasius/gpu-model-fbx",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "FBX import/export planning with license-reviewed skeleton, skin, and animation handling.",
   "type": "module",
   "sideEffects": false,
