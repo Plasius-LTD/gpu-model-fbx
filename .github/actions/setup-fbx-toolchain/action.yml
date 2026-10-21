@@ -1,0 +1,19 @@
+name: Pinned FBX WASM compiler
+description: Install the exact reviewed Emscripten toolchain for reproducible package builds.
+runs:
+  using: composite
+  steps:
+    - name: Checkout pinned SDK installer
+      uses: actions/checkout@v5
+      with:
+        repository: emscripten-core/emsdk
+        ref: d7b4130688bfa348392b921ab04015aa15c4f154
+        path: .emsdk
+        persist-credentials: false
+    - name: Install pinned compiler
+      shell: bash
+      run: |
+        set -euo pipefail
+        ./.emsdk/emsdk install 5.0.7
+        ./.emsdk/emsdk activate 5.0.7
+        echo "EMCC=${GITHUB_WORKSPACE}/.emsdk/upstream/emscripten/emcc" >> "$GITHUB_ENV"

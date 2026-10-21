@@ -340,6 +340,9 @@ jobs:
             npm run privacy:check
           fi
 
+      - name: Install pinned FBX compiler
+        uses: ./.github/actions/setup-fbx-toolchain
+
       - name: Install dependencies
         run: npm ci
 

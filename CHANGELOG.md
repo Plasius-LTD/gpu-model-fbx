@@ -10,7 +10,11 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Import the bounded FBX7400 static triangle profile through a pinned ufbx Wasm
+    worker and published core/runtime contracts, with fail-closed remote access,
+    explicit unsupported-profile errors, fixed resource limits and disposal.
+  - Add source/compiler/artifact provenance, third-party notices, native Wasm LCOV
+    and real browser worker qualification to the build and release gates.
 
 - **Changed**
   - (placeholder)
