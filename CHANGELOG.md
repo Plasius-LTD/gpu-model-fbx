@@ -9,6 +9,11 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 
 ## [Unreleased]
 
+### Added
+- Documented the FBX dependency and licensing decision, browser/worker qualification
+  requirements, and scoped implementation work packages before parser development.
+  Clarified that the current public API contains bootstrap metadata only.
+
 - **Added**
   - (placeholder)
 
