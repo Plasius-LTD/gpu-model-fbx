@@ -9,6 +9,20 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.1.7] - 2026-10-21
+
 ### Added
 - Documented the FBX dependency and licensing decision, browser/worker qualification
   requirements, and scoped implementation work packages before parser development.
@@ -478,7 +492,7 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 
 ---
 
-[Unreleased]: https://github.com/Plasius-LTD/gpu-model-fbx/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/Plasius-LTD/gpu-model-fbx/compare/v0.1.7...HEAD
 [1.0.0]: https://github.com/Plasius-LTD/schema/releases/tag/v1.0.0
 [1.0.13]: https://github.com/Plasius-LTD/schema/releases/tag/v1.0.13
 [1.0.17]: https://github.com/Plasius-LTD/schema/releases/tag/v1.0.17
@@ -520,3 +534,4 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 [0.1.4]: https://github.com/Plasius-LTD/gpu-model-fbx/releases/tag/v0.1.4
 [0.1.5]: https://github.com/Plasius-LTD/gpu-model-fbx/releases/tag/v0.1.5
 [0.1.6]: https://github.com/Plasius-LTD/gpu-model-fbx/releases/tag/v0.1.6
+[0.1.7]: https://github.com/Plasius-LTD/gpu-model-fbx/releases/tag/v0.1.7
