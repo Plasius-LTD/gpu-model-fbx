@@ -9,7 +9,7 @@ geometry/material/hierarchy, rig/morph/animation/resource/export and repair work
 | Routing and full parsing | Content sniff then pinned ufbx; FBX7400 ASCII/binary, compressed arrays. Names/extensions alone are insufficient. |
 | Supported data | Exactly one mesh instance, triangular faces, at most10000 triangles. Other element kinds, user properties, child hierarchy, normals/UVs/colours and DCC features fail explicitly. |
 | Canonical fidelity | Right-handed Y-up/metres, reflected winding corrected, floor-centred positions; original units/axes/version/name recorded. Position tolerance1e-5metres. No unsupported model becomes empty. |
-| Acquisition | Published runtime0.3.1;8MiB entry ceiling,1attempt, caller signal/integrity, total10s deadline. Trusted file providers enforce limits during reading. |
+| Acquisition | Published runtime0.3.2;8MiB entry ceiling,1attempt, caller signal/integrity, total10s deadline. Trusted file providers enforce limits during reading. |
 | Native limits | Shared temp/result allocator24MiB,50000attempts,64node depth; fixed64MiBWasm,1MiBstack,10000triangles/30000vertices/360000output bytes. Only tightening permitted. |
 | Cancellation | Progress deadline and optional atomic abort word; hard termination for hanging producers/workers, failed authorization and disposal. One active operation/importer. |
 | Ownership | Transfer a bounded input copy; free native input and all parser allocations, transfer only copied positions; terminate fresh worker on every settlement. Caller owns returned core payloads. |
@@ -25,7 +25,12 @@ test code. The triangle coordinates, generic names and compact ASCII/binary
 containers are synthetic; no downloaded example models, Autodesk SDK assets or
 third-party fixture rights are assumed. Compressed-array counts intentionally
 disagree in the adversarial fixture. ufbx rejects that malformed length before
-allocation; separate constrained allocator fixtures prove allocation limits.
+allocation. A second compressed fixture has a consistent declared/actual count
+(4,200,000 doubles,33.6MB expanded) and must hit the shared24MiB allocation
+ceiling; it runs in native coverage, worker integration and both browser modes.
+The caller-mutation regression also proves the imported payload matches its
+source identity across asynchronous hashing using published runtime0.3.2.
+ESM and built CJS consumers must recognize the returned private core brand.
 
 Native coverage uses the same bridge and parser compiled to instrumented Wasm,
 with a test-only in-memory profile filesystem. The production build disables its

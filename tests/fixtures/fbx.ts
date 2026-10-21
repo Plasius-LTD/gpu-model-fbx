@@ -36,12 +36,12 @@ function scalar(type: string, value: number | string): Buffer {
   if (type === "L") out.writeBigInt64LE(BigInt(value), 1); else out.writeUInt32LE(Number(value), 1);
   return out;
 }
-export function binary(options: { compressed?: boolean; declaredVertices?: number; quad?: boolean; material?: boolean } = {}): Uint8Array {
-  function array(type: string, values: number[], declared = values.length): Buffer {
-    let bytes = Buffer.alloc(values.length * (type === "d" ? 8 : 4));
+export function binary(options: { compressed?: boolean; declaredVertices?: number; expandedVertices?: boolean; quad?: boolean; material?: boolean } = {}): Uint8Array {
+  function array(type: string, values: number[], declared?: number, expanded?: number): Buffer {
+    let bytes = Buffer.alloc((expanded ?? values.length) * (type === "d" ? 8 : 4));
     values.forEach((v, i) => type === "d" ? bytes.writeDoubleLE(v, i * 8) : bytes.writeInt32LE(v, i * 4));
     if (options.compressed) bytes = deflateSync(bytes);
-    const header = Buffer.alloc(13); header.write(type); header.writeUInt32LE(declared, 1); header.writeUInt32LE(options.compressed ? 1 : 0, 5); header.writeUInt32LE(bytes.length, 9);
+    const header = Buffer.alloc(13); header.write(type); header.writeUInt32LE(declared ?? expanded ?? values.length, 1); header.writeUInt32LE(options.compressed ? 1 : 0, 5); header.writeUInt32LE(bytes.length, 9);
     return Buffer.concat([header, bytes]);
   }
   const S = (v: string) => scalar("S", v), L = (v: number) => scalar("L", v), I = (v: number) => scalar("I", v);
@@ -55,7 +55,7 @@ export function binary(options: { compressed?: boolean; declaredVertices?: numbe
     { name: "GlobalSettings", children: [{ name: "Version", props: [I(1000)] }, { name: "Properties70", children: properties }] },
     { name: "Objects", children: [
       { name: "Geometry", props: [L(1), S("Triangle\0\x01Geometry"), S("Mesh")], children: [
-        { name: "Vertices", props: [array("d", [0, 0, 0, 1, 0, 0, 0, 1, 0, ...(options.quad ? [1, 1, 0] : [])], options.declaredVertices)] },
+        { name: "Vertices", props: [array("d", [0, 0, 0, 1, 0, 0, 0, 1, 0, ...(options.quad ? [1, 1, 0] : [])], options.declaredVertices, options.expandedVertices ? 4_200_000 : undefined)] },
         { name: "PolygonVertexIndex", props: [array("i", options.quad ? [0, 1, 3, -3] : [0, 1, -3])] },
       ] },
       { name: "Model", props: [L(2), S("Triangle\0\x01Model"), S("Mesh")], children: [{ name: "Version", props: [I(232)] }] },

@@ -26,6 +26,7 @@ async function run() {
   granted = true;
   for (const key of ["ascii", "binary", "compressed"]) {
     const document = await importer.load({ kind: "uint8-array", bytes: new Uint8Array(fixture[key]) });
+    const { isGpuModelDocument } = await import("@plasius/gpu-model-core"); check(isGpuModelDocument(document), "Core private document brand");
     check(JSON.stringify(document.bounds) === JSON.stringify({ min: [-.5, 0, 0], max: [.5, 1, 0] }), `${key} bounds`);
     check(document.meshes.length === 1 && document.nodes[0].name === "Triangle", `${key} document`);
     check(active === 0, "Worker retained after successful import"); checks.push(key);
@@ -34,6 +35,7 @@ async function run() {
   await rejects(importer.load({ kind: "uint8-array", bytes: new Uint8Array(fixture.quad) }), "unsupported-profile");
   await rejects(importer.load({ kind: "uint8-array", bytes: new Uint8Array(fixture.binary).slice(0, 100) }), "invalid-fbx");
   await rejects(importer.load({ kind: "uint8-array", bytes: new Uint8Array(fixture.adversarial) }), "invalid-fbx"); checks.push("malformed-unsupported-decompression-rejected");
+  await rejects(importer.load({ kind: "uint8-array", bytes: new Uint8Array(fixture.expanded) }), "limit-exceeded"); checks.push("consistent-expanded-array-bounded");
   const beforeRollback = created; granted = false;
   await rejects(importer.load({ kind: "uint8-array", bytes: new Uint8Array(fixture.binary) }), "disabled"); check(created === beforeRollback, "Rollback allocated worker");
   granted = true;

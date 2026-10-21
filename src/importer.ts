@@ -1,5 +1,6 @@
 import type { GpuModelDocument, ModelSource } from "@plasius/gpu-model-core";
 import type { RuntimeDependencies } from "@plasius/gpu-model-runtime";
+import { loadRuntime } from "./modules.js";
 import { FBX_IMPORT_FEATURE_FLAG, FBX_IMPORT_LIMITS, FbxImportError, sniffFbx, type FbxImportLimits, type ParsedFbx } from "./policy.js";
 export { FBX_IMPORT_FEATURE_FLAG, FBX_IMPORT_PROFILE, FBX_IMPORT_LIMITS, FbxImportError, sniffFbx } from "./policy.js";
 export type { FbxImportErrorCode } from "./policy.js";
@@ -82,7 +83,7 @@ export function createFbxImporter(options: FbxImporterOptions): FbxImporter {
       }
       async function work() {
         await granted();
-        const { AdapterRegistry, ModelRuntime } = await import("@plasius/gpu-model-runtime"); check();
+        const { AdapterRegistry, ModelRuntime } = await loadRuntime(); check();
         const registry = new AdapterRegistry().register<ParsedFbx, unknown>({ formatId: "fbx", load: async () => ({ formatId: "fbx", sniff: ({ bytes }) => Boolean(sniffFbx(bytes)), load: async input => ({ canonicalModel: await parse(input.bytes) }) }) });
         const runtime = new ModelRuntime({ registry, dependencies: options.dependencies });
         let result;

@@ -34,7 +34,7 @@ and ambient transport APIs. Wasm is an embedded literal, not an arbitrary remote
 payload. The only worker module imports are this package's fixed shared code and
 native glue. The host supplies its admitted worker location/factory.
 
-Reuse published runtime0.3.1 for bounded acquisition, integrity and cancellation;
+Reuse published runtime0.3.2 for bounded acquisition, integrity and cancellation;
 reuse published core0.6.0 for source/document types and private resource/document
 verification. Temporary parsed positions cross the worker boundary; untrusted
 worker output is bounded/revalidated before core verification. No cached worker
@@ -69,3 +69,10 @@ N/A for this package-only API. PR/exact-main CI and main/cd.yml/production relea
 remain mandatory; registry artifacts, provenance and installed ESM/CJS/declarations
 must be verified before Task23 is Done. Rollback disables the stored flag and pins
 the last qualified package. No new environment rollout switch is introduced.
+
+The dual build selects the matching published core/runtime module format only
+after admission. CJS uses its module loader lazily so private core brands match
+the consuming CJS core; ESM keeps dynamic imports and browser code splitting.
+A real CJS worker-import regression checks the returned document brand. The
+CI SDK and build cache live under runner temporary storage, keeping downloaded
+compiler sources outside project lint without excluding package source.

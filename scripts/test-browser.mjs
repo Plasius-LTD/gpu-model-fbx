@@ -7,7 +7,7 @@ import { chromium } from "playwright-core";
 import { ascii, binary } from "../tests/fixtures/fbx.ts";
 const cache = path.resolve(process.env.FBX_BUILD_CACHE ?? ".fbx-build-cache", "browser"); await mkdir(cache, { recursive: true });
 await build({ entryPoints: { client: "tests/browser/client.mjs" }, bundle: true, splitting: true, chunkNames: "client-chunks/[name]-[hash]", format: "esm", platform: "browser", alias: { "fbx-under-test": path.resolve(process.env.FBX_PACKAGE_DIST ?? "dist", "index.js") }, outdir: cache });
-const fixtures = JSON.stringify({ ascii: [...ascii], binary: [...binary()], compressed: [...binary({ compressed: true })], quad: [...binary({ quad: true })], adversarial: [...binary({ compressed: true, declaredVertices: 0x20000000 })] });
+const fixtures = JSON.stringify({ ascii: [...ascii], binary: [...binary()], compressed: [...binary({ compressed: true })], quad: [...binary({ quad: true })], adversarial: [...binary({ compressed: true, declaredVertices: 0x20000000 })], expanded: [...binary({ compressed: true, expandedVertices: true })] });
 const requests = [];
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://127.0.0.1"); requests.push({ path: url.pathname, method: request.method });

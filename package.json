@@ -111,6 +111,6 @@
   },
   "dependencies": {
     "@plasius/gpu-model-core": "0.6.0",
-    "@plasius/gpu-model-runtime": "0.3.1"
+    "@plasius/gpu-model-runtime": "0.3.2"
   }
 }

@@ -1,5 +1,6 @@
 import type { GpuModelDocument } from "@plasius/gpu-model-core";
 import { FbxImportError, FBX_IMPORT_PROFILE, type ParsedFbx } from "./policy.js";
+import { loadCore, loadRuntime } from "./modules.js";
 
 /** Revalidates the worker message before crossing the privately verified core boundary. */
 export async function toDocument(value: ParsedFbx, sourceHash: string, signal: AbortSignal): Promise<GpuModelDocument> {
@@ -24,8 +25,8 @@ export async function toDocument(value: ParsedFbx, sourceHash: string, signal: A
     outMin[i % 3] = Math.min(outMin[i % 3]!, positions[i]!); outMax[i % 3] = Math.max(outMax[i % 3]!, positions[i]!);
   }
   if (signal.aborted) throw new FbxImportError("aborted");
-  const core = await import("@plasius/gpu-model-core");
-  const { sha256Hex } = await import("@plasius/gpu-model-runtime");
+  const core = await loadCore();
+  const { sha256Hex } = await loadRuntime();
   const hash = await sha256Hex(new Uint8Array(positions.buffer));
   const document = {
     schemaVersion: core.GPU_MODEL_DOCUMENT_SCHEMA_VERSION, coordinateSystem: core.CANONICAL_GPU_MODEL_COORDINATE_SYSTEM,

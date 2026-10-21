@@ -3,17 +3,17 @@ description: Install the exact reviewed Emscripten toolchain for reproducible pa
 runs:
   using: composite
   steps:
-    - name: Checkout pinned SDK installer
-      uses: actions/checkout@v5
-      with:
-        repository: emscripten-core/emsdk
-        ref: d7b4130688bfa348392b921ab04015aa15c4f154
-        path: .emsdk
-        persist-credentials: false
-    - name: Install pinned compiler
+    - name: Install pinned compiler outside the project checkout
       shell: bash
       run: |
         set -euo pipefail
-        ./.emsdk/emsdk install 5.0.7
-        ./.emsdk/emsdk activate 5.0.7
-        echo "EMCC=${GITHUB_WORKSPACE}/.emsdk/upstream/emscripten/emcc" >> "$GITHUB_ENV"
+        SDK_DIR="$(mktemp -d "${RUNNER_TEMP}/fbx-emsdk.XXXXXX")"
+        git -C "$SDK_DIR" init
+        git -C "$SDK_DIR" remote add origin https://github.com/emscripten-core/emsdk.git
+        git -C "$SDK_DIR" fetch --depth 1 --no-tags origin d7b4130688bfa348392b921ab04015aa15c4f154
+        git -C "$SDK_DIR" checkout --detach FETCH_HEAD
+        test "$(git -C "$SDK_DIR" rev-parse HEAD)" = d7b4130688bfa348392b921ab04015aa15c4f154
+        "$SDK_DIR/emsdk" install 5.0.7
+        "$SDK_DIR/emsdk" activate 5.0.7
+        echo "EMCC=${SDK_DIR}/upstream/emscripten/emcc" >> "$GITHUB_ENV"
+        echo "FBX_BUILD_CACHE=${RUNNER_TEMP}/fbx-build-${GITHUB_JOB}" >> "$GITHUB_ENV"

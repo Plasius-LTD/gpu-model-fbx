@@ -47,7 +47,7 @@ allocated at import/constructor time or while the remote gate denies access.
 
 The API accepts canonical `ModelSource` descriptors and optional caller signal
 and integrity evidence. Runtime acquisition is reused from the published
-`@plasius/gpu-model-runtime@0.3.1`; canonical validation is owned by
+`@plasius/gpu-model-runtime@0.3.2`; canonical validation is owned by
 `@plasius/gpu-model-core@0.6.0`. There are no workspace/local package references.
 File-provider injections must enforce the supplied byte ceiling while reading.
 

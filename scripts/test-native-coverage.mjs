@@ -35,6 +35,7 @@ parse(binary().slice(0, 100), 1); parse(new Uint8Array(), 3); parse(new Uint8Arr
 parse(binary({ quad: true }), 2); parse(binary({ material: true }), 2);
 // ufbx rejects the inconsistent compressed-array length before allocating.
 parse(binary({ compressed: true, declaredVertices: 0x20000000 }), 1);
+parse(binary({ compressed: true, expandedVertices: true }), 3);
 parse(ascii, 3, 1); parse(ascii, 3, 25165824, 1); parse(ascii, 3, 25165825); parse(ascii, 3, 0); parse(ascii, 3, 25165824, 0); parse(ascii, 3, 25165824, 50001);
 parse(ascii, 4, 25165824, 50000, 0);
 wasm.cancelWord = new Int32Array(new SharedArrayBuffer(4)); Atomics.store(wasm.cancelWord, 0, 1);
