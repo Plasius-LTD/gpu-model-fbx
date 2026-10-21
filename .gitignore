@@ -8,3 +8,7 @@ coverage/
 **/certs/**/*.p8
 
 /legal/CLA-REGISTRY.csv
+
+.fbx-build-cache/
+
+.emsdk/

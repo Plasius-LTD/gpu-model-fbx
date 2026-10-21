@@ -1,0 +1,44 @@
+{
+  "upstream": {
+    "repository": "https://github.com/ufbx/ufbx",
+    "revision": "26a482ae66871d7de36eb722aa060bce95bce274",
+    "license": "MIT",
+    "sha256": {
+      "ufbx.c": "4a956c26a708e40d82ecb0aeaee54da709d5ba7c144c9642174970059bda7e1d",
+      "ufbx.h": "f787be529af577efc04f3e3e735844a08556718dbb613d1211c2b313d72895dc",
+      "LICENSE": "0dd48ebadf52273c736256325c8f078c03c8bb4facee22a4122de0ad3f615391"
+    }
+  },
+  "compiler": {
+    "emsdkRevision": "d7b4130688bfa348392b921ab04015aa15c4f154",
+    "sdkBackend": "6cd98e86d7749ff98b82b7f2ae78eb4f01942788",
+    "version": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 5.0.7 (263db4cffa6f9fc2ec514a70abac81362ea41849)"
+  },
+  "flags": [
+    "ufbx.c",
+    "bridge.c",
+    "-O2",
+    "-DUFBX_NO_STDIO",
+    "-DUFBX_NO_FORMAT_OBJ",
+    "-DUFBX_NO_GEOMETRY_CACHE",
+    "-sENVIRONMENT=worker",
+    "-sFILESYSTEM=0",
+    "-sDYNAMIC_EXECUTION=0",
+    "-sALLOW_MEMORY_GROWTH=0",
+    "-sINITIAL_MEMORY=67108864",
+    "-sSTACK_SIZE=1048576",
+    "-sSTACK_OVERFLOW_CHECK=2",
+    "-sMALLOC=emmalloc",
+    "-sASSERTIONS=1",
+    "-sMODULARIZE=1",
+    "-sEXPORT_ES6=1",
+    "-sSINGLE_FILE=1",
+    "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPF32,HEAPF64",
+    "-sEXPORTED_FUNCTIONS=_malloc,_free,_fbx_parse,_fbx_header,_fbx_output,_fbx_name,_fbx_name_size,_fbx_outstanding",
+    "-o",
+    "ufbx.mjs"
+  ],
+  "bridgeSha256": "6eb730bea5c668a247ebfcddd439316949a8bd7d21c11b1ea0215c97f7ce4e0d",
+  "glueSha256": "27666bd2b49cb71141c7177b4d8af75fe71baf2412483cb7eb0dfd668dd8af8c",
+  "wasmSha256": "0ce8ba35bd2edf29091c17938dd7a0122d42712ac3cc460b47a142e250087ca7"
+}

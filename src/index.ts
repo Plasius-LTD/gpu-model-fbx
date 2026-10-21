@@ -6,3 +6,5 @@ export const packageBootstrap = Object.freeze({
   featureFlag: "gpu.model.conversion.enabled",
   status: "bootstrap",
 } as const);
+
+export * from "./importer.js";
