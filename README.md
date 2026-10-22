@@ -6,19 +6,38 @@ This repository is the dedicated package boundary defined by ADR 0094.
 
 ## Supported import profile
 
-`createFbxImporter` imports the `plasius.fbx-static-triangles/1` profile: FBX 7400
-ASCII or binary (including compressed arrays), one static triangle-mesh instance,
-at most 10,000 triangular faces. It normalizes world geometry to right-handed
-Y-up metres, corrects reflected winding, and floor-centres the result. The core
-verifies the output buffer and the complete immutable document. Source name,
-units, axes and version remain in the model; errors never echo source text.
+`createFbxImporter` imports the `plasius.fbx-static-scene/2` profile: FBX 7400
+ASCII or binary (including compressed arrays), static mesh instances and source
+hierarchies. Polygons of 3–64 corners are triangulated by pinned ufbx, with
+per-corner normals/UV0 and per-face material groups preserved. The profile allows
+64 source nodes, 32 materials, 128 material groups and 10,000 triangles across all
+instances. Positions use Float32 resources; matrices retain double precision.
 
-Materials, textures, vertex normals/UVs/colours, multiple mesh instances, child
-hierarchies, user properties, skins, morphs, animation, cameras, lights and other
-element kinds fail with `unsupported-profile`. Unsupported scenes never become
-empty models. Broader fidelity and export remain separate work; this release does
-not implement general DCC interchange, tolerant repair or an exporter. The legacy
-`packageName`/`packageBootstrap` metadata remains compatible.
+The importer converts axes and units to canonical right-handed Y-up metres once.
+Geometric transforms affect mesh attributes only. Effective local matrices
+preserve evaluated static FBX pivots and all three inherit modes, including
+nonuniform/negative scale. Reflected winding and inverse-transpose normals remain
+consistent. Only root translations receive the single world floor-centre offset.
+Source units/axes/version, node/mesh/material names, numeric transform properties,
+rotation/inherit modes and the 20 common FBX material maps remain in metadata.
+Names with control characters and singular transforms fail explicitly.
+
+Lambert diffuse/emission/opacity factors map to a named custom Lambert workflow;
+consumers must support that workflow. Phong/other shader lobes, unsupported
+material channels and out-of-range colour preview clamping produce canonical
+`loss` records. Import rejects these by default with `unsupported-profile` and
+`error.diagnosticReport`. A caller may explicitly use `{ allowMaterialLoss: true }`
+for the diffuse preview approximation; inspect `document.diagnostics` and
+`document.metadata.materialDiagnosticReport`. Common numeric source maps and the
+shading-model name are retained; arbitrary custom shader graphs are not preserved.
+Consent never admits unsupported scene elements or resource acquisition.
+
+Textures, additional UV sets, vertex colours/tangents, user properties, skins,
+morphs, animation, cameras, lights and other element kinds still fail with
+`unsupported-profile`. Unattached meshes and unsupported scenes never become
+empty models. Texture/rig/animation/export/repair work remains in tasks25–30;
+this package does not yet implement general DCC interchange or an exporter.
+The legacy `packageName`/`packageBootstrap` metadata remains compatible.
 
 ```ts
 import { createFbxImporter } from "@plasius/gpu-model-fbx";
@@ -54,7 +73,9 @@ File-provider injections must enforce the supplied byte ceiling while reading.
 `FBX_IMPORT_LIMITS` fixes 8 MiB input, 24 MiB aggregate parser allocations,
 50,000 allocation attempts and a 10-second whole-operation deadline. Optional
 `limits` can only tighten these values. The parser has a fixed 64 MiB Wasm memory,
-1 MiB stack, 64-node depth ceiling and 360,000-byte position output ceiling.
+1 MiB stack and 64-node depth ceiling. Each attribute buffer is at most
+360,000 bytes; positions/normals/UV0 total at most 960,000 verified bytes.
+Native node/material/primitive/name tables have fixed capacities.
 Each importer admits one operation at a time, creates one fresh worker, and
 terminates it on success, failure, abort, timeout or disposal. It retains no model
 cache. Returned model payloads belong to the caller; no engine GC timing claim
@@ -78,7 +99,10 @@ Autodesk FBX SDK is excluded from the default browser/npm distribution. Assimp
 remains an alternative if the export candidate cannot meet the declared profile.
 The importer pins ufbx v0.23.1 / `26a482ae66871d7de36eb722aa060bce95bce274`
 under MIT. [ADR 0007](docs/adrs/adr-0007-bounded-browser-fbx-import.md)
-records the compiled worker boundary, toolchain and qualification decisions.
+records the compiled worker boundary and toolchain.
+[ADR 0008](docs/adrs/adr-0008-static-scene-fidelity.md) and
+[the geometry qualification](docs/design/fbx-static-scene-qualification.md)
+define static mapping, losses, tolerances and qualification evidence.
 
 [TDR 0001](docs/tdrs/tdr-0001-fbx-implementation-and-qualification.md)
 maps the dependency review to tracked import, geometry/metadata, skinning,

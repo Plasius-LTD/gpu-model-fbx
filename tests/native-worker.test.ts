@@ -53,7 +53,7 @@ describe("compiled pinned parser in isolated worker", () => {
       expect(document.nodes[0]?.name).toBe("Triangle");
     } finally { importer.dispose(); }
   });
-  it.each([binary().slice(0, 100), binary({ quad: true }), binary({ material: true }), binary({ compressed: true, declaredVertices: 0x20000000 })])("rejects malformed, unsupported and adversarial allocations", async bytes => {
+  it.each([binary().slice(0, 100), binary({ material: true }), binary({ compressed: true, declaredVertices: 0x20000000 })])("rejects malformed, unsupported and adversarial allocations", async bytes => {
     const importer = createFbxImporter({ resolveFeatureFlag: async () => true, createWorker: factory });
     try { await expect(importer.load({ kind: "uint8-array", bytes })).rejects.toBeDefined(); } finally { importer.dispose(); }
   });

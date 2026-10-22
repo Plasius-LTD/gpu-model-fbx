@@ -24,7 +24,7 @@
     "build": "tsup && node scripts/build-wasm.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && npm run test:types",
     "audit:eslint": "eslint . --max-warnings=0",
     "audit:deps": "npm ls --all --omit=optional --omit=peer > /dev/null 2>&1 || true",
     "audit:npm": "npm audit --audit-level=high --omit=dev",
@@ -36,7 +36,8 @@
     "pack:check": "node scripts/verify-public-package.cjs && npm run artifacts:fbx",
     "prepublishOnly": "npm run build && npm run pack:check",
     "artifacts:fbx": "node scripts/verify-fbx-artifacts.mjs",
-    "test:browser": "node --import tsx scripts/test-browser.mjs"
+    "test:browser": "node --import tsx scripts/test-browser.mjs",
+    "test:types": "tsc --ignoreConfig --noEmit --strict --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 tests/types/import.mts tests/types/import.cts"
   },
   "keywords": [
     "schema",
@@ -73,6 +74,7 @@
   "homepage": "https://github.com/Plasius-LTD/gpu-model-fbx#readme",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@plasius/gpu-model-renderer": "0.4.0",
     "@types/node": "^26.0.1",
     "@typescript-eslint/eslint-plugin": "^8.59.3",
     "@typescript-eslint/parser": "^8.59.3",

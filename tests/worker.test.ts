@@ -4,8 +4,8 @@ import { FBX_IMPORT_LIMITS } from "../src/policy.js";
 const state = vi.hoisted(() => ({ code: 0, count: 3, outstanding: 0, malloc: 100, freed: [] as number[] }));
 vi.mock("../dist/ufbx.mjs", () => ({ default: async () => {
   const memory = new ArrayBuffer(65536); const h = new Float64Array(memory); const p = new Float32Array(memory);
-  h.set([state.count, 7400, 1, 1, 0, 2, 4], 0); p.set([0, 0, 0, 1, 0, 0, 0, 1, 0], 32);
-  return { HEAPU8: new Uint8Array(memory), HEAPF64: h, HEAPF32: p, _malloc: () => state.malloc, _free: (ptr: number) => state.freed.push(ptr), _fbx_parse: () => state.code, _fbx_outstanding: () => state.outstanding, _fbx_header: () => 0, _fbx_output: () => 128, _fbx_name: () => 512, _fbx_name_size: () => 0 };
+  h.set([state.count, 7400, 1, 1, 0, 2, 4, 1, 1, 0], 0); p.set([0, 0, 0, 1, 0, 0, 0, 1, 0], 32);
+  return { HEAPU8: new Uint8Array(memory), HEAPF64: h, HEAPF32: p, _malloc: () => state.malloc, _free: (ptr: number) => state.freed.push(ptr), _fbx_parse: () => state.code, _fbx_outstanding: () => state.outstanding, _fbx_header: () => 0, _fbx_output: () => 128, _fbx_normals: () => 512, _fbx_uvs: () => 1024, _fbx_nodes: () => 2048, _fbx_primitives: () => 4096, _fbx_materials: () => 8192, _fbx_node_names: () => 16384, _fbx_material_names: () => 32768, _fbx_mesh_names: () => 32768, _fbx_material_shaders: () => 32768 };
 } }));
 afterEach(() => { vi.unstubAllGlobals(); state.code = 0; state.count = 3; state.outstanding = 0; state.malloc = 100; state.freed = []; });
 async function run(data: unknown) {
@@ -34,7 +34,7 @@ describe("worker protocol", () => {
     state.malloc = 0; expect((await run(request())).mock.calls[0]?.[0]).toEqual({ error: 3 });
   });
   it("accepts a bounded shared cancellation word when supplied", async () => {
-    expect((await run({ ...request(), cancel: new SharedArrayBuffer(4) })).mock.calls[0]?.[0].result.protocol).toBe(1);
+    expect((await run({ ...request(), cancel: new SharedArrayBuffer(4) })).mock.calls[0]?.[0].result.protocol).toBe(2);
   });
   it("denies ambient network and script transports", async () => {
     await run(request());

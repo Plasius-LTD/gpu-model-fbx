@@ -9,6 +9,13 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 
 ## [Unreleased]
 
+### Added
+- Import static FBX polygon scenes with per-corner normals/UV0, material groups,
+  hierarchy/pivots/inherit modes and geometric transforms. Normalize source
+  units/axes and world origin once; preserve source metadata and require explicit
+  consent for diagnosed material preview losses. Qualify through the published
+  canonical-renderer bridge, bounded worker protocol and browser fixtures.
+
 - **Added**
   - (placeholder)
 
