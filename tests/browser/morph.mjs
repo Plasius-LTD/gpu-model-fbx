@@ -72,6 +72,7 @@ export async function checkMorphs(importer, fixtures, check) {
     await import("@plasius/gpu-model-renderer");
   for (const name of [
     "morph",
+    "morphNegative",
     "morphCentimetres",
     "morphInstances",
     "morphSkin",
@@ -92,7 +93,14 @@ export async function checkMorphs(importer, fixtures, check) {
       ),
     );
     check(
-      Math.abs(delta - (name === "morphInbetween" ? 1.5 : 0.75)) < 1e-5,
+      Math.abs(
+        delta -
+          (name === "morphInbetween"
+            ? 1.5
+            : name === "morphNegative"
+              ? 0.25
+              : 0.75),
+      ) < 1e-5,
       "Morph numeric displacement",
     );
     check(

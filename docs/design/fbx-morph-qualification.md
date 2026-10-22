@@ -6,7 +6,7 @@ Profile plasius.fbx-morph/4; protocol4. See ADR0010 for mapping and derived limi
 | Acceptance | Evidence required |
 | --- | --- |
 | Sparse fidelity | Synthetic sparse positions/normals, affected source membership resource, zero deltas, duplicate/index/count/nonfinite failures. Preserve source channel/shape names, defaults and identities. |
-| Channels/in-betweens | Independent channels, positive increasing thresholds; defaults0/25/50/75/100/125%, effective coefficients and numeric result; explicit unsupported-morph for stacked/weighted/nonpositive/duplicate semantics. |
+| Channels/in-betweens | Independent channels, positive increasing thresholds; defaults-25/0/25/50/75/100/125%, effective coefficients and numeric result; explicit unsupported-morph for stacked/weighted/nonpositive/duplicate semantics. |
 | Shared meshes and seams | Per-instance targets with shared source identity; triangulated multi-face/material groups repeat affected corners without altering base attributes. |
 | Coordinates | Metre/centimetre, Z-up, reflected basis, geometric nonuniform transforms and translation; deltas use directions and the normal/base normalization convention. |
 | Skin composition | Morph mesh positions first, then actual published renderer skin palette; bind and changed-pose numeric results. No FBX take import is claimed. |

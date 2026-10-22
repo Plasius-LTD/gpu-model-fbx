@@ -30,10 +30,11 @@ await build({
 });
 const fixtures = JSON.stringify({
   morph: [...morphFixture()],
-  morphCentimetres: [...morphFixture({centimetres:true})],
-  morphInstances: [...morphFixture({instances:true})],
-  morphSkin: [...morphFixture({skin:true})],
-  morphInbetween: [...morphFixture({inbetween:true})],
+  morphNegative: [...morphFixture({ weight: -25 })],
+  morphCentimetres: [...morphFixture({ centimetres: true })],
+  morphInstances: [...morphFixture({ instances: true })],
+  morphSkin: [...morphFixture({ skin: true })],
+  morphInbetween: [...morphFixture({ inbetween: true })],
   skin: [...skinFixture()],
   skinCentimetres: [...skinFixture({ centimetres: true })],
   skinMultiple: [...skinFixture({ multiple: true })],

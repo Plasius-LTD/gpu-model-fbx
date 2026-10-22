@@ -127,6 +127,8 @@ for (const opts of [
   { centimetres: true },
   { geometric: true },
   { inbetween: true, weight: 125 },
+  { weight: -25 },
+  { inbetween: true, weight: -25 },
 ])
   parse(morphFixture(opts), 0);
 for (const opts of [

@@ -37,7 +37,7 @@ conversion, and the root floor-centre offset is never applied to deltas.
 
 Positive, strictly increasing in-between thresholds are admitted. Canonical
 shape/default/node weights carry ufbx's effective piecewise-linear coefficients
-at the authored channel default, including endpoint extrapolation. Revalidate
+at the authored channel default, including negative/default endpoint extrapolation. Revalidate
 those coefficients independently on the host. Retained channel metadata allows a
 future animation mapper to reconstruct channel-to-target weights. This task does
 not claim authored FBX take/layer animation (task27). A host blends morphs in mesh

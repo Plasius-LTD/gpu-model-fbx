@@ -75,7 +75,7 @@ describe("Task26 authored morph fidelity", () => {
       0, 0, 0, 1, 0, 0, 0, 1, 0,
     ]);
   });
-  it.each([0, 25, 50, 75, 100, 125])(
+  it.each([-25, 0, 25, 50, 75, 100, 125])(
     "retains in-between targets and effective default at %i percent",
     async (weight) => {
       const d = await load({ inbetween: true, weight });
@@ -265,6 +265,17 @@ describe("Task26 authored morph fidelity", () => {
     } finally {
       importer.dispose();
     }
+  });
+  it("preserves a negative single-target default through renderer deformation", async () => {
+    const d = await load({ weight: -25 });
+    expect(d.blendShapes[0]!.defaultWeight).toBe(-0.25);
+    const view = await prepareGpuModelRendererInput(d, {
+      conversionEnabled: true,
+    });
+    const posed = morphPositions(view);
+    expect(
+      posed[0]!.find((p: number[]) => Math.abs(p[0]! - 1) < 1e-5)![1],
+    ).toBeCloseTo(-0.25, 5);
   });
   it("enforces target capacity", async () => {
     await expect(load({ channels: 5 })).rejects.toMatchObject({

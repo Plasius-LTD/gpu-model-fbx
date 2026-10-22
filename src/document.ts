@@ -575,6 +575,10 @@ export async function toDocument(
       const t = (weight - low) / (high - low);
       expected[next] = t;
       if (prev >= 0) expected[prev] = 1 - t;
+    } else {
+      // Positive-only target profiles extrapolate from zero to the first key
+      // on the negative side as well; retain the authored negative coefficient.
+      expected[0] = weight / morphRows[group[0]!]![5]!;
     }
     group.forEach((i, k) => {
       if (
