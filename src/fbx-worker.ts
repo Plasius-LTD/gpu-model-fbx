@@ -19,6 +19,12 @@ interface WasmModule {
   _fbx_material_names(): number;
   _fbx_mesh_names(): number;
   _fbx_material_shaders(): number;
+  _fbx_poses(): number;
+  _fbx_pose_names(): number;
+  _fbx_joints(): number;
+  _fbx_skins(): number;
+  _fbx_clusters(): number;
+  _fbx_influences(): number;
   _fbx_outstanding(): number;
 }
 const scope = globalThis as unknown as {
@@ -81,13 +87,18 @@ scope.onmessage = async (event: MessageEvent) => {
     if (wasm._fbx_outstanding() !== 0) throw 3;
     const header = wasm.HEAPF64.subarray(
       wasm._fbx_header() / 8,
-      wasm._fbx_header() / 8 + 10,
+      wasm._fbx_header() / 8 + 15,
     );
     for (const [index, min, max] of [
       [0, 3, 30000],
       [7, 1, 64],
       [8, 1, 128],
       [9, 0, 32],
+      [10, 0, 64],
+      [11, 0, 64],
+      [12, 0, 128],
+      [13, 0, 512],
+      [14, 0, 8],
     ])
       if (
         !Number.isInteger(header[index!]) ||
@@ -131,8 +142,34 @@ scope.onmessage = async (event: MessageEvent) => {
           slot.subarray(0, end),
         );
       });
+    const poseTable = wasm.HEAPF64.slice(
+      wasm._fbx_poses() / 8,
+      wasm._fbx_poses() / 8 + header[13]! * 14,
+    );
+    const jointTable = wasm.HEAPF64.slice(
+      wasm._fbx_joints() / 8,
+      wasm._fbx_joints() / 8 + header[10]! * 11,
+    );
+    const skinTable = wasm.HEAPF64.slice(
+      wasm._fbx_skins() / 8,
+      wasm._fbx_skins() / 8 + header[11]! * 3,
+    );
+    const clusterTable = wasm.HEAPF64.slice(
+      wasm._fbx_clusters() / 8,
+      wasm._fbx_clusters() / 8 + header[12]! * 39,
+    );
+    const influenceTable = wasm.HEAPF64.slice(
+      wasm._fbx_influences() / 8,
+      wasm._fbx_influences() / 8 + header[0]! * 16,
+    );
     const result: ParsedFbx = {
-      protocol: 2,
+      protocol: 3,
+      poseTable,
+      poseNames: names(wasm._fbx_pose_names(), header[14]!),
+      jointTable,
+      skinTable,
+      clusterTable,
+      influenceTable,
       positions,
       normals,
       uvs,
@@ -149,6 +186,11 @@ scope.onmessage = async (event: MessageEvent) => {
       axes: [header[4]!, header[5]!, header[6]!],
     };
     scope.postMessage({ result }, [
+      poseTable.buffer,
+      jointTable.buffer,
+      skinTable.buffer,
+      clusterTable.buffer,
+      influenceTable.buffer,
       positions.buffer,
       normals.buffer,
       uvs.buffer,
@@ -158,7 +200,7 @@ scope.onmessage = async (event: MessageEvent) => {
     ]);
   } catch (error) {
     scope.postMessage({
-      error: typeof error === "number" && error >= 1 && error <= 4 ? error : 5,
+      error: typeof error === "number" && error >= 1 && error <= 7 ? error : 5,
     });
   } finally {
     if (pointer) wasm!._free(pointer);

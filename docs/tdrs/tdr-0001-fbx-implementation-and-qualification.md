@@ -119,3 +119,13 @@ Core0.6.0 already represents effective matrices, source metadata, attributes and
 loss ledgers; no owning-package extension is required. Renderer0.4.0 is pinned
 as a development-only consumer check; existing runtime dependencies do not change.
 Task24 completion does not complete tasks25–30 or Feature1151/coordinator1.
+
+## Task25 linear skeletal bindings
+
+Task25 extends the supported profile through [ADR0009](../adrs/adr-0009-linear-skin-bindings.md)
+and [the skin qualification](../design/fbx-skin-qualification.md). Published
+core0.6.0 and renderer0.4.0 already cover the admitted skeletal representation;
+no dependency changes or owning-package extension is needed. Complete weight
+rows and accessor payloads agree; per-skin inverse binds preserve shared joint
+identity. Unsupported deformation composition and joint shear reject explicitly.
+Task25 does not complete remaining tasks26–30 or Feature1151/coordinator1.

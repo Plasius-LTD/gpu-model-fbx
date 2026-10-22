@@ -6,7 +6,7 @@ export const FBX_IMPORT_LIMITS = Object.freeze({
   timeoutMs: 10_000,
 });
 export const FBX_IMPORT_FEATURE_FLAG = "gpu.model.conversion.enabled" as const;
-export const FBX_IMPORT_PROFILE = "plasius.fbx-static-scene/2" as const;
+export const FBX_IMPORT_PROFILE = "plasius.fbx-linear-skin/3" as const;
 export type FbxImportLimits = {
   readonly [K in keyof typeof FBX_IMPORT_LIMITS]: number;
 };
@@ -20,7 +20,9 @@ export type FbxImportErrorCode =
   | "invalid-fbx"
   | "unsupported-profile"
   | "limit-exceeded"
-  | "worker-failed";
+  | "worker-failed"
+  | "unsupported-skinning"
+  | "invalid-skin-weights";
 /** Bounded codes deliberately exclude source content and upstream error text. */
 export class FbxImportError extends Error {
   public constructor(
@@ -33,7 +35,13 @@ export class FbxImportError extends Error {
 }
 /** Private, bounded worker protocol. It carries no canonical verification brand. */
 export interface ParsedFbx {
-  readonly protocol: 2;
+  readonly protocol: 3;
+  readonly poseTable: Float64Array;
+  readonly poseNames: readonly string[];
+  readonly jointTable: Float64Array;
+  readonly skinTable: Float64Array;
+  readonly clusterTable: Float64Array;
+  readonly influenceTable: Float64Array;
   readonly positions: Float32Array;
   readonly normals: Float32Array;
   readonly uvs: Float32Array;

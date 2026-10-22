@@ -1,7 +1,7 @@
 {
   "name": "@plasius/gpu-model-fbx",
   "version": "0.3.0",
-  "description": "Bounded browser-worker FBX static triangle import through verified canonical GPU model contracts.",
+  "description": "Bounded browser-worker FBX scene and linear skin import through verified canonical GPU model contracts.",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",

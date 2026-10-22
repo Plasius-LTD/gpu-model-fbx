@@ -9,6 +9,14 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 
 ## [Unreleased]
 
+### Added
+- Preserve bounded FBX linear skeletons, per-mesh skin palettes, shared joints,
+  cluster/link/bind-pose matrices and complete corner-expanded weights through
+  canonical core and the renderer bridge. Explicitly reject unsupported skinning
+  and invalid weights; qualify binary/compressed, axis/unit and changed-pose cases.
+  The profile literal and private worker protocol advance to3; deploy matching
+  worker assets and recompile literal-typed profile consumers.
+
 - **Added**
   - (placeholder)
 

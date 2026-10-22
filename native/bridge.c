@@ -21,8 +21,13 @@ void fbx_test_continue(int value) { native_continue = value; }
 #define PRIMITIVE_STRIDE 6
 #define MATERIAL_STRIDE 126
 static float positions[90000], normals[90000], uvs[60000];
-static double header[10], nodes[64*NODE_STRIDE], primitives[128*PRIMITIVE_STRIDE], materials[32*MATERIAL_STRIDE];
+static double header[15], nodes[64*NODE_STRIDE], primitives[128*PRIMITIVE_STRIDE], materials[32*MATERIAL_STRIDE];
 static char node_names[64][513], mesh_names[64][513], material_names[32][513], material_shaders[32][129];
+static double joint_table[64*11], skin_table[64*3], cluster_table[128*39], influence_table[30000*16];
+static double pose_table[512*14];
+static char pose_names[8][513];
+static int joint_map[64];
+static unsigned joint_count, skin_count, cluster_count;
 static size_t live_bytes, attempts, memory_ceiling, allocation_ceiling;
 static int budget_failed;
 static const char *transform_props[] = { "Lcl Translation", "Lcl Rotation", "Lcl Scaling", "PreRotation", "PostRotation", "RotationOffset", "RotationPivot", "ScalingOffset", "ScalingPivot", "GeometricTranslation", "GeometricRotation", "GeometricScaling" };
@@ -50,6 +55,12 @@ char *fbx_node_names(void) { return node_names[0]; }
 char *fbx_material_names(void) { return material_names[0]; }
 char *fbx_mesh_names(void) { return mesh_names[0]; }
 char *fbx_material_shaders(void) { return material_shaders[0]; }
+double *fbx_poses(void) { return pose_table; }
+char *fbx_pose_names(void) { return pose_names[0]; }
+double *fbx_joints(void) { return joint_table; }
+double *fbx_skins(void) { return skin_table; }
+double *fbx_clusters(void) { return cluster_table; }
+double *fbx_influences(void) { return influence_table; }
 unsigned fbx_outstanding(void) { return (unsigned)live_bytes; }
 static double determinant(ufbx_matrix m) {
   return m.m00*(m.m11*m.m22-m.m12*m.m21)-m.m01*(m.m10*m.m22-m.m12*m.m20)+m.m02*(m.m10*m.m21-m.m11*m.m20);
@@ -67,14 +78,15 @@ static int node_index(ufbx_scene *scene, ufbx_node *node) {
 }
 /* Safe finite codes; no upstream exception strings, source text or resource paths. */
 int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigned allocation_limit) {
-  memset(header,0,sizeof(header));
+  memset(header,0,sizeof(header)); joint_count=skin_count=cluster_count=0;
+  for (unsigned i=0;i<64;i++) joint_map[i]=-1;
   if (live_bytes || !length || length>8388608 || !memory_limit || memory_limit>25165824 || !allocation_limit || allocation_limit>50000) return 3;
   memory_ceiling=memory_limit; allocation_ceiling=allocation_limit; attempts=0; budget_failed=0;
   ufbx_load_opts opts={0};
   opts.temp_allocator.allocator.realloc_fn=bounded_realloc; opts.result_allocator.allocator.realloc_fn=bounded_realloc;
   opts.temp_allocator.memory_limit=opts.result_allocator.memory_limit=memory_limit;
   opts.temp_allocator.allocation_limit=opts.result_allocator.allocation_limit=allocation_limit;
-  opts.strict=true; opts.force_single_thread_ascii_parsing=true;
+  opts.retain_dom=true; opts.strict=true; opts.force_single_thread_ascii_parsing=true;
   opts.file_format=UFBX_FILE_FORMAT_FBX; opts.load_external_files=false;
   opts.node_depth_limit=64; opts.progress_cb.fn=progress; opts.progress_interval_hint=1024;
   opts.target_axes=ufbx_axes_right_handed_y_up; opts.target_unit_meters=1.0;
@@ -87,12 +99,54 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
   if (!deadline_ok()) { result=4; goto done; }
   if (scene->metadata.version!=7400 || !ufbx_coordinate_axes_valid(scene->settings.axes) || !isfinite(scene->settings.unit_meters) || scene->settings.unit_meters<=0 || scene->metadata.warnings.count) goto done;
   if (scene->nodes.count<2 || !scene->meshes.count || scene->nodes.data[0]!=scene->root_node) goto done;
-  if (scene->nodes.count>65 || scene->materials.count>32) { result=3; goto done; }
+  if (scene->nodes.count>65 || scene->materials.count>32 || scene->skin_deformers.count>64 || scene->skin_clusters.count>128) { result=3; goto done; }
   for (size_t i=0;i<scene->meshes.count;i++) if (!scene->meshes.data[i]->instances.count) goto done;
+  for(size_t si=0;si<scene->skin_deformers.count;si++) {
+    int used=0;for(size_t mi=0;mi<scene->meshes.count;mi++)for(size_t j=0;j<scene->meshes.data[mi]->skin_deformers.count;j++)if(scene->meshes.data[mi]->skin_deformers.data[j]==scene->skin_deformers.data[si])used=1;
+    if(!used)goto done;
+  }
+  for(size_t ci=0;ci<scene->skin_clusters.count;ci++) {
+    int used=0;for(size_t si=0;si<scene->skin_deformers.count;si++)for(size_t j=0;j<scene->skin_deformers.data[si]->clusters.count;j++)if(scene->skin_deformers.data[si]->clusters.data[j]==scene->skin_clusters.data[ci])used=1;
+    if(!used)goto done;
+  }
   for (size_t i=0;i<scene->elements.count;i++) {
     ufbx_element *element=scene->elements.data[i];
-    if (element->type!=UFBX_ELEMENT_NODE && element->type!=UFBX_ELEMENT_MESH && element->type!=UFBX_ELEMENT_MATERIAL) goto done;
+    if (element->type!=UFBX_ELEMENT_NODE && element->type!=UFBX_ELEMENT_MESH && element->type!=UFBX_ELEMENT_MATERIAL && element->type!=UFBX_ELEMENT_BONE && element->type!=UFBX_ELEMENT_SKIN_DEFORMER && element->type!=UFBX_ELEMENT_SKIN_CLUSTER && element->type!=UFBX_ELEMENT_POSE) goto done;
     for (size_t j=0;j<element->props.props.count;j++) if (element->props.props.data[j].flags & UFBX_PROP_FLAG_USER_DEFINED) goto done;
+  }
+  if (scene->poses.count>8) { result=3; goto done; }
+  unsigned pose_cursor=0;
+  for (size_t pi=0;pi<scene->poses.count;pi++) {
+    ufbx_pose *pose=scene->poses.data[pi];
+    if (!pose->is_bind_pose || !pose->bone_poses.count || pose->bone_poses.count>64 || pose->name.length>512 || memchr(pose->name.data,0,pose->name.length)) { result=6; goto done; }
+    memcpy(pose_names[pi],pose->name.data,pose->name.length);pose_names[pi][pose->name.length]=0;
+    for (size_t bi=0;bi<pose->bone_poses.count;bi++) {
+      ufbx_bone_pose bp=pose->bone_poses.data[bi];int node=node_index(scene,bp.bone_node);if(node<0)goto done;
+      double *out=&pose_table[pose_cursor++*14];out[0]=pi;out[1]=node;
+      if(!copy_matrix(out+2,bp.bone_to_world))goto done;
+    }
+  }
+  header[13]=pose_cursor;header[14]=scene->poses.count;
+  for (size_t ci=0;ci<scene->skin_clusters.count;ci++) {
+    ufbx_skin_cluster *cluster=scene->skin_clusters.data[ci];
+    int ni=node_index(scene,cluster->bone_node); if (ni<0) goto done;
+    joint_map[ni]=0;
+  }
+  for (size_t ni=1;ni<scene->nodes.count;ni++) {
+    ufbx_node *node=scene->nodes.data[ni];
+    if (!node->bone && joint_map[ni-1]<0) continue;
+    ufbx_matrix local=node->node_to_world;
+    if (node->parent!=scene->root_node) {
+      if (fabs(determinant(node->parent->node_to_world))<1e-12) goto done;
+      ufbx_matrix inverse=ufbx_matrix_invert(&node->parent->node_to_world); local=ufbx_matrix_mul(&inverse,&local);
+    }
+    ufbx_transform trs=ufbx_matrix_to_transform(&local);
+    ufbx_matrix reconstructed=ufbx_transform_to_matrix(&trs);
+    for (unsigned k=0;k<12;k++) if (!isfinite(local.v[k]) || fabs(reconstructed.v[k]-local.v[k])>1e-8*fmax(1,fabs(local.v[k]))) { result=6; goto done; }
+    double *out=&joint_table[joint_count*11]; out[0]=ni-1;
+    for (unsigned k=0;k<3;k++) { out[1+k]=trs.translation.v[k]; out[8+k]=trs.scale.v[k]; }
+    for (unsigned k=0;k<4;k++) out[4+k]=trs.rotation.v[k];
+    joint_map[ni-1]=(int)joint_count++;
   }
   for (size_t mi=0;mi<scene->materials.count;mi++) {
     ufbx_material *material=scene->materials.data[mi]; double *out=&materials[mi*MATERIAL_STRIDE];
@@ -116,7 +170,7 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
     ufbx_node *node=scene->nodes.data[ni]; double *out=&nodes[(ni-1)*NODE_STRIDE];
     memset(out,0,NODE_STRIDE*sizeof(double));
     if (!deadline_ok()) { result=4; goto done; }
-    if (node->name.length>512 || memchr(node->name.data,0,node->name.length) || node->all_attribs.count>(node->mesh ? 1 : 0)) goto done;
+    if (node->name.length>512 || memchr(node->name.data,0,node->name.length) || node->all_attribs.count>(node->mesh || node->bone ? 1 : 0)) goto done;
     int parent=node_index(scene,node->parent); if (parent < -1) goto done;
     out[0]=parent; out[1]=primitive_count; out[2]=0;
     ufbx_matrix local=node->node_to_world;
@@ -133,8 +187,43 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
     ufbx_mesh *mesh=node->mesh; if (!mesh) continue;
     if (mesh->name.length>512 || memchr(mesh->name.data,0,mesh->name.length)) goto done;
     memcpy(mesh_names[ni-1],mesh->name.data,mesh->name.length); mesh_names[ni-1][mesh->name.length]=0;
-    if (!mesh->num_faces || mesh->vertex_color.exists || mesh->vertex_tangent.exists || mesh->vertex_bitangent.exists || mesh->uv_sets.count>1 || mesh->skin_deformers.count || mesh->blend_deformers.count) goto done;
+    if (!mesh->num_faces || mesh->vertex_color.exists || mesh->vertex_tangent.exists || mesh->vertex_bitangent.exists || mesh->uv_sets.count>1 || mesh->blend_deformers.count) goto done;
     if (mesh->num_triangles>10000 || cursor/3+mesh->num_triangles*3>30000) { result=3; goto done; }
+    ufbx_skin_deformer *skin=NULL; unsigned first_cluster=cluster_count;
+    if (mesh->skin_deformers.count) {
+      if (mesh->skin_deformers.count!=1) { result=6; goto done; }
+      skin=mesh->skin_deformers.data[0];
+      if (skin->skinning_method!=UFBX_SKINNING_METHOD_LINEAR) { result=6; goto done; }
+      if (skin_count>=64 || !skin->clusters.count || skin->clusters.count>64 || cluster_count+skin->clusters.count>128 || mesh->num_vertices>30000 || skin->max_weights_per_vertex>8) { result=3; goto done; }
+      if (skin->vertices.count!=mesh->num_vertices) { result=7; goto done; }
+      for (size_t ci=0;ci<skin->clusters.count;ci++) {
+        ufbx_skin_cluster *cluster=skin->clusters.data[ci];
+        int bone=node_index(scene,cluster->bone_node); if (bone<0 || joint_map[bone]<0) goto done;
+        for (size_t previous=0;previous<ci;previous++) if (skin->clusters.data[previous]->bone_node==cluster->bone_node) { result=6; goto done; }
+        ufbx_dom_node *mode=ufbx_dom_find(cluster->element.dom_node,"Mode");
+        if (mode && mode->values.count && mode->values.data[0].value_str.length && (mode->values.data[0].value_str.length!=9 || memcmp(mode->values.data[0].value_str.data,"Normalize",9))) { result=6; goto done; }
+        if (cluster->vertices.count!=cluster->weights.count || cluster->num_weights!=cluster->weights.count) { result=7; goto done; }
+        unsigned char seen[30000]={0};
+        for (size_t wi=0;wi<cluster->weights.count;wi++) {
+          unsigned v=cluster->vertices.data[wi]; double w=cluster->weights.data[wi];
+          if (v>=mesh->num_vertices || seen[v] || !isfinite(w) || w<0 || w>1 || (w>0 && (float)w==0)) { result=7; goto done; }
+          seen[v]=1;
+        }
+        double *out=&cluster_table[cluster_count++*39]; out[0]=bone; out[1]=cluster->typed_id; out[2]=skin->typed_id;
+        if (!copy_matrix(out+3,cluster->mesh_node_to_bone) || !copy_matrix(out+15,cluster->geometry_to_bone) || !copy_matrix(out+27,cluster->bind_to_world) || fabs(determinant(cluster->mesh_node_to_bone))<1e-12) { result=7; goto done; }
+      }
+      double *out=&skin_table[skin_count++*3]; out[0]=ni-1; out[1]=first_cluster; out[2]=skin->clusters.count;
+      for (size_t vi=0;vi<skin->vertices.count;vi++) {
+        ufbx_skin_vertex v=skin->vertices.data[vi]; double sum=0;
+        if (v.num_weights>8 || v.weight_begin>skin->weights.count || v.num_weights>skin->weights.count-v.weight_begin) { result=3; goto done; }
+        for (unsigned wi=0;wi<v.num_weights;wi++) {
+          ufbx_skin_weight w=skin->weights.data[v.weight_begin+wi];
+          if (w.cluster_index>=skin->clusters.count || !isfinite(w.weight) || w.weight<0 || w.weight>1) { result=7; goto done; }
+          sum+=w.weight;
+        }
+        if (!isfinite(sum) || fabs(sum-1)>1e-6) { result=7; goto done; }
+      }
+    }
     double det=determinant(node->geometry_to_world); if (!isfinite(det) || fabs(det)<1e-12) goto done;
     ufbx_matrix normal_matrix=ufbx_matrix_for_normals(&node->geometry_to_node);
     /* Group by the instance's material slot; corner indices preserve seams. */
@@ -161,6 +250,11 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
           unsigned uv=cursor/3*2;
           if (mesh->vertex_uv.exists) { ufbx_vec2 v=ufbx_get_vertex_vec2(&mesh->vertex_uv,index); if (!isfinite(v.x) || !isfinite(v.y) || fabs(v.x)>1000000 || fabs(v.y)>1000000) goto done; uvs[uv]=(float)v.x; uvs[uv+1]=(float)v.y; }
           else uvs[uv]=uvs[uv+1]=0;
+          double *influence=&influence_table[(cursor/3)*16]; memset(influence,0,16*sizeof(double));
+          if (skin) {
+            unsigned vi=mesh->vertex_indices.data[index]; ufbx_skin_vertex v=skin->vertices.data[vi];
+            for (unsigned wi=0;wi<v.num_weights;wi++) { ufbx_skin_weight w=skin->weights.data[v.weight_begin+wi]; influence[wi]=w.cluster_index; influence[8+wi]=w.weight; }
+          }
           cursor+=3;
         }
       }
@@ -175,7 +269,7 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
   if (!cursor) goto done;
   header[0]=cursor/3; header[1]=scene->metadata.version; header[2]=scene->metadata.ascii; header[3]=scene->settings.unit_meters;
   header[4]=scene->settings.axes.right; header[5]=scene->settings.axes.up; header[6]=scene->settings.axes.front;
-  header[7]=scene->nodes.count-1; header[8]=primitive_count; header[9]=scene->materials.count; result=0;
+  header[7]=scene->nodes.count-1; header[8]=primitive_count; header[9]=scene->materials.count; header[10]=joint_count; header[11]=skin_count; header[12]=cluster_count; result=0;
 done:
   ufbx_free_scene(scene); if (result) memset(header,0,sizeof(header)); return result;
 }

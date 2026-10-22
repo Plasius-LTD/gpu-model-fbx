@@ -17,7 +17,7 @@ const document: Promise<GpuModelDocument> = importer.load(
   { kind: "uint8-array", bytes: new Uint8Array() },
   { allowMaterialLoss: true, signal: new AbortController().signal },
 );
-const profile: "plasius.fbx-static-scene/2" = FBX_IMPORT_PROFILE;
+const profile: "plasius.fbx-linear-skin/3" = FBX_IMPORT_PROFILE;
 const report: GpuModelDiagnosticReport | undefined = new FbxImportError(
   "unsupported-profile",
 ).diagnosticReport;

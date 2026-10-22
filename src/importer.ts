@@ -162,6 +162,8 @@ export function createFbxImporter(options: FbxImporterOptions): FbxImporter {
                           2: "unsupported-profile",
                           3: "limit-exceeded",
                           4: "deadline-exceeded",
+                          6: "unsupported-skinning",
+                          7: "invalid-skin-weights",
                         } as const
                       )[data?.error as 1] ?? "worker-failed",
                     ),
