@@ -16,7 +16,13 @@ function message(): ParsedFbx {
     nodeTable[62] =
       1;
   return {
-    protocol: 3,
+    protocol: 4,
+    morphTable: new Float64Array(),
+    morphIndices: new Float64Array(),
+    morphPositions: new Float32Array(),
+    morphNormals: new Float32Array(),
+    morphNames: [],
+    channelNames: [],
     poseTable: new Float64Array(),
     poseNames: [],
     jointTable: new Float64Array(),
@@ -41,6 +47,90 @@ function message(): ParsedFbx {
 }
 const convert = (value: ParsedFbx, signal = new AbortController().signal) =>
   toDocument(value, "a".repeat(64), signal);
+function morphMessage(): ParsedFbx {
+  return {
+    ...message(),
+    morphTable: new Float64Array([
+      0, 0, 3, 0, 0, 1, 0.75, 0.75, 0, 0, 0, 1, 0, 3,
+    ]),
+    morphIndices: new Float64Array([1]),
+    morphPositions: new Float32Array([0, 0, 0, 0, 1, 0, 0, 0, 0]),
+    morphNormals: new Float32Array(9),
+    morphNames: ["Target"],
+    channelNames: ["Channel"],
+  };
+}
+describe("untrusted morph protocol admission", () => {
+  it("snapshots target/channel data and source membership before yielding", async () => {
+    const v = morphMessage(),
+      pending = convert(v);
+    v.morphTable.fill(99);
+    v.morphIndices.fill(99);
+    v.morphPositions.fill(99);
+    v.morphNormals.fill(99);
+    (v.morphNames as string[])[0] = "Changed";
+    const d = await pending;
+    expect(d.blendShapes[0]!.name).toBe("Target");
+    expect(d.blendShapes[0]!.defaultWeight).toBe(0.75);
+    const refs = d.resources.find((r) => r.id === "morph-controlpoints-0")!;
+    expect([...new Uint32Array(await refs.payload.arrayBuffer())]).toEqual([1]);
+  });
+  it.each([
+    (v: ParsedFbx) => ({ ...v, morphTable: new Float64Array(15) }),
+    (v: ParsedFbx) => ({ ...v, morphPositions: new Float32Array(360003) }),
+    (v: ParsedFbx) => ({ ...v, morphNormals: new Float32Array(8) }),
+    (v: ParsedFbx) => ({ ...v, morphNames: ["bad\nname"] }),
+    (v: ParsedFbx) => ({ ...v, channelNames: [] }),
+    (v: ParsedFbx) => ({
+      ...v,
+      morphIndices: new Float64Array(new SharedArrayBuffer(8)),
+    }),
+    (v: ParsedFbx) => ({
+      ...v,
+      morphNormals: new Float32Array(new SharedArrayBuffer(36)),
+    }),
+  ])("rejects forged shapes and shared heaps", async (mutate) => {
+    await expect(
+      convert(mutate(morphMessage()) as ParsedFbx),
+    ).rejects.toMatchObject({ code: "worker-failed" });
+  });
+  it.each([
+    [0, 99],
+    [1, 1],
+    [2, 6],
+    [3, -1],
+    [4, 128],
+    [5, 0],
+    [6, 1000001],
+    [7, 0.5],
+    [8, 1],
+    [9, 64],
+    [10, 1],
+    [11, 2],
+    [12, 1],
+    [13, 1],
+  ])("rejects forged target row[%i]", async (index, value) => {
+    const v = morphMessage();
+    v.morphTable[index] = value;
+    await expect(convert(v)).rejects.toMatchObject({ code: "worker-failed" });
+  });
+  it.each([NaN, 1000001])(
+    "rejects nonfinite or excessive deltas %s",
+    async (n) => {
+      const v = morphMessage();
+      v.morphPositions[4] = n;
+      await expect(convert(v)).rejects.toMatchObject({ code: "worker-failed" });
+    },
+  );
+  it("rejects hidden normal data and out-of-range membership", async () => {
+    const v = morphMessage();
+    v.morphNormals[0] = 1;
+    await expect(convert(v)).rejects.toMatchObject({ code: "worker-failed" });
+    const w = morphMessage();
+    w.morphIndices[0] = 3;
+    await expect(convert(w)).rejects.toMatchObject({ code: "worker-failed" });
+  });
+});
 describe("untrusted static-scene protocol admission", () => {
   it("owns the complete message before asynchronous verification yields", async () => {
     const input = message();

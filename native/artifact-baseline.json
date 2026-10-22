@@ -34,11 +34,11 @@
     "-sEXPORT_ES6=1",
     "-sSINGLE_FILE=1",
     "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPF32,HEAPF64",
-    "-sEXPORTED_FUNCTIONS=_malloc,_free,_fbx_parse,_fbx_header,_fbx_output,_fbx_normals,_fbx_uvs,_fbx_nodes,_fbx_primitives,_fbx_materials,_fbx_node_names,_fbx_material_names,_fbx_mesh_names,_fbx_material_shaders,_fbx_poses,_fbx_pose_names,_fbx_joints,_fbx_skins,_fbx_clusters,_fbx_influences,_fbx_outstanding",
+    "-sEXPORTED_FUNCTIONS=_malloc,_free,_fbx_parse,_fbx_header,_fbx_output,_fbx_normals,_fbx_uvs,_fbx_nodes,_fbx_primitives,_fbx_materials,_fbx_node_names,_fbx_material_names,_fbx_mesh_names,_fbx_material_shaders,_fbx_poses,_fbx_pose_names,_fbx_joints,_fbx_skins,_fbx_clusters,_fbx_influences,_fbx_morphs,_fbx_morph_indices,_fbx_morph_positions,_fbx_morph_normals,_fbx_morph_names,_fbx_channel_names,_fbx_outstanding",
     "-o",
     "ufbx.mjs"
   ],
-  "bridgeSha256": "f73abd876aa6f455f3df9c127bea0ce7d9f0e637bc4c264e9f710c40004e3fcf",
-  "glueSha256": "a9c25cd9aa5d948723b80c6dd303414e994c36ea0d8ca808131c67e661bdf7fb",
-  "wasmSha256": "537523d3bb22aa800b604929e7af813377b04694f46af2b16fa8139ac3c20db3"
+  "bridgeSha256": "afef4720aa0552381251c0a09bcca0e1f5b5755382bc78ea960d462603c2fcb0",
+  "glueSha256": "6e291692e165b3bdb2eb98a5ba64b5b5590e2de19e3595ad2d61785344fddebb",
+  "wasmSha256": "341291e584028ae7be508b06a9682c74c282805f7d4bc9c4a66e266b274f909e"
 }

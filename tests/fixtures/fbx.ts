@@ -49,6 +49,7 @@ export function binary(
   options: {
     compressed?: boolean;
     skin?: boolean;
+    morph?: boolean;
     declaredVertices?: number;
     expandedVertices?: boolean;
     quad?: boolean;
@@ -389,6 +390,47 @@ export function binary(
       [22, 20],
       [10, 21],
       [11, 22],
+    ])
+      connections.push({ name: "C", props: [S("OO"), L(a!), L(b!)] });
+  }
+  if (options.morph) {
+    const D = (v: number) => {
+      const b = Buffer.alloc(9);
+      b.write("D");
+      b.writeDoubleLE(v, 1);
+      return b;
+    };
+    const objects = nodes.find((n) => n.name === "Objects")!.children!,
+      connections = nodes.find((n) => n.name === "Connections")!.children!;
+    objects.push(
+      {
+        name: "Deformer",
+        props: [L(300), S("Face\0\x01Deformer"), S("BlendShape")],
+        children: [{ name: "Version", props: [I(100)] }],
+      },
+      {
+        name: "Deformer",
+        props: [L(400), S("Smile0\0\x01SubDeformer"), S("BlendShapeChannel")],
+        children: [
+          { name: "Version", props: [I(100)] },
+          { name: "DeformPercent", props: [D(75)] },
+          { name: "FullWeights", props: [array("d", [100])] },
+        ],
+      },
+      {
+        name: "Geometry",
+        props: [L(401), S("Target0_0\0\x01Geometry"), S("Shape")],
+        children: [
+          { name: "Version", props: [I(100)] },
+          { name: "Indexes", props: [array("i", [1])] },
+          { name: "Vertices", props: [array("d", [0, 1, 0])] },
+        ],
+      },
+    );
+    for (const [a, b] of [
+      [300, 1],
+      [400, 300],
+      [401, 400],
     ])
       connections.push({ name: "C", props: [S("OO"), L(a!), L(b!)] });
   }

@@ -137,8 +137,19 @@ export async function toDocument(
   if (
     !value ||
     Object.keys(value).sort().join() !==
-      "ascii,axes,clusterTable,influenceTable,jointTable,materialNames,materialShaders,materialTable,meshNames,nodeNames,nodeTable,normals,poseNames,poseTable,positions,primitiveTable,protocol,skinTable,unitMetres,uvs,version" ||
-    value.protocol !== 3 ||
+      "ascii,axes,channelNames,clusterTable,influenceTable,jointTable,materialNames,materialShaders,materialTable,meshNames,morphIndices,morphNames,morphNormals,morphPositions,morphTable,nodeNames,nodeTable,normals,poseNames,poseTable,positions,primitiveTable,protocol,skinTable,unitMetres,uvs,version" ||
+    value.protocol !== 4 ||
+    !(value.morphTable instanceof Float64Array) ||
+    !integer(value.morphTable.length / 14, 0, 128) ||
+    !(value.morphIndices instanceof Float64Array) ||
+    value.morphIndices.length > 120000 ||
+    !(value.morphPositions instanceof Float32Array) ||
+    value.morphPositions.length > 360000 ||
+    value.morphPositions.length % 3 !== 0 ||
+    !(value.morphNormals instanceof Float32Array) ||
+    value.morphNormals.length !== value.morphPositions.length ||
+    !names(value.morphNames, value.morphTable.length / 14) ||
+    !names(value.channelNames, value.morphTable.length / 14) ||
     !(value.poseTable instanceof Float64Array) ||
     !integer(value.poseTable.length / 14, 0, 512) ||
     !Array.isArray(value.poseNames) ||
@@ -182,6 +193,10 @@ export async function toDocument(
   )
     invalid();
   const arrays = [
+    value.morphTable,
+    value.morphIndices,
+    value.morphPositions,
+    value.morphNormals,
     value.positions,
     value.normals,
     value.uvs,
@@ -199,6 +214,12 @@ export async function toDocument(
   // may change already-admitted values while core/resource verification yields.
   value = {
     ...value,
+    morphTable: value.morphTable.slice(),
+    morphIndices: value.morphIndices.slice(),
+    morphPositions: value.morphPositions.slice(),
+    morphNormals: value.morphNormals.slice(),
+    morphNames: [...value.morphNames],
+    channelNames: [...value.channelNames],
     poseTable: value.poseTable.slice(),
     poseNames: [...value.poseNames],
     jointTable: value.jointTable.slice(),
@@ -218,6 +239,10 @@ export async function toDocument(
     axes: [...value.axes],
   };
   for (const array of [
+    value.morphTable,
+    value.morphIndices,
+    value.morphPositions,
+    value.morphNormals,
     value.positions,
     value.normals,
     value.uvs,
@@ -433,6 +458,132 @@ export async function toDocument(
     }
     if (Math.abs(sum - (skinIndex === undefined ? 0 : 1)) > 1e-6) invalid();
   }
+  const morphRows = Array.from(
+    { length: value.morphTable.length / 14 },
+    (_, i) => value.morphTable.subarray(i * 14, (i + 1) * 14),
+  );
+  if (
+    value.morphPositions.some((n) => Math.abs(n) > 1000000) ||
+    value.morphNormals.some((n) => Math.abs(n) > 1000000)
+  )
+    invalid();
+  const channels = new Map<string, number[]>();
+  const perNode = new Map<number, number>();
+  const nodeMorphSource = new Map<number, readonly number[]>();
+  let morphCursor = 0,
+    refCursor = 0;
+  morphRows.forEach((row, i) => {
+    const [
+      node,
+      start,
+      count,
+      channel,
+      shape,
+      threshold,
+      weight,
+      effective,
+      normal,
+      deformer,
+      refStart,
+      refCount,
+      key,
+      controlPoints,
+    ] = row;
+    if (
+      !integer(node!, 0, nodeCount - 1) ||
+      start !== morphCursor ||
+      !integer(count!, 3, 30000) ||
+      count! % 3 ||
+      !integer(channel!, 0, 127) ||
+      !integer(shape!, 0, 127) ||
+      threshold! <= 0 ||
+      threshold! > 1000000 ||
+      Math.abs(weight!) > 1000000 ||
+      Math.abs(effective!) > 1000000 ||
+      !integer(normal!, 0, 1) ||
+      !integer(deformer!, 0, 63) ||
+      refStart !== refCursor ||
+      !integer(refCount!, 0, 30000) ||
+      !integer(key!, 0, 3) ||
+      !integer(controlPoints!, 1, 30000) ||
+      start! + count! > value.morphPositions.length / 3 ||
+      refStart! + refCount! > value.morphIndices.length
+    )
+      invalid();
+    const primitives = primitiveRows.filter((p) => p[0] === node);
+    if (
+      primitives.reduce((n, p) => n + p[2]!, 0) !== count ||
+      (normal === 1 && primitives.some((p) => p[4] !== 1))
+    )
+      invalid();
+    if (
+      normal === 0 &&
+      value.morphNormals
+        .subarray(start! * 3, (start! + count!) * 3)
+        .some((n) => n !== 0)
+    )
+      invalid();
+    const targets = (perNode.get(node!) ?? 0) + 1;
+    if (targets > 4) invalid();
+    perNode.set(node!, targets);
+    const source = nodeMorphSource.get(node!);
+    if (source && (source[0] !== deformer || source[1] !== controlPoints))
+      invalid();
+    nodeMorphSource.set(node!, [deformer!, controlPoints!]);
+    for (let k = 0; k < refCount!; k++) {
+      const index = value.morphIndices[refStart! + k]!;
+      if (
+        !integer(index, 0, controlPoints! - 1) ||
+        (k > 0 && index <= value.morphIndices[refStart! + k - 1]!)
+      )
+        invalid();
+    }
+    const channelKey = `${node}:${channel}`;
+    const group = channels.get(channelKey) ?? [];
+    if (key !== group.length) invalid();
+    if (group.length) {
+      const prev = morphRows[group[group.length - 1]!]!;
+      if (
+        threshold! <= prev[5]! ||
+        weight !== prev[6] ||
+        deformer !== prev[9] ||
+        controlPoints !== prev[13] ||
+        value.channelNames[i] !== value.channelNames[group[0]!]
+      )
+        invalid();
+    }
+    if (group.some((j) => morphRows[j]![4] === shape)) invalid();
+    group.push(i);
+    channels.set(channelKey, group);
+    morphCursor += count!;
+    refCursor += refCount!;
+  });
+  if (
+    morphCursor !== value.morphPositions.length / 3 ||
+    refCursor !== value.morphIndices.length
+  )
+    invalid();
+  for (const group of channels.values()) {
+    const weight = morphRows[group[0]!]![6]!,
+      expected = group.map(() => 0);
+    if (weight > 0) {
+      let next = group.findIndex((i) => morphRows[i]![5]! > weight);
+      if (next < 0) next = group.length - 1;
+      const prev = next - 1,
+        low = prev < 0 ? 0 : morphRows[group[prev]!]![5]!,
+        high = morphRows[group[next]!]![5]!;
+      const t = (weight - low) / (high - low);
+      expected[next] = t;
+      if (prev >= 0) expected[prev] = 1 - t;
+    }
+    group.forEach((i, k) => {
+      if (
+        Math.abs(morphRows[i]![7]! - expected[k]!) >
+        1e-8 * Math.max(1, Math.abs(expected[k]!))
+      )
+        invalid();
+    });
+  }
   const offset = [(min[0]! + max[0]!) / 2, min[1]!, (min[2]! + max[2]!) / 2];
   const issues: GpuModelConversionIssue[] = [];
   const materials = Array.from({ length: materialCount }, (_, i) => {
@@ -543,6 +694,7 @@ export async function toDocument(
   const resourcesToVerify = [
     {
       id: "positions",
+      baseVertex: 0,
       data: value.positions,
       width: 3,
       componentType: "f32",
@@ -551,6 +703,7 @@ export async function toDocument(
     },
     {
       id: "normals",
+      baseVertex: 0,
       data: value.normals,
       width: 3,
       componentType: "f32",
@@ -559,6 +712,7 @@ export async function toDocument(
     },
     {
       id: "uvs",
+      baseVertex: 0,
       data: value.uvs,
       width: 2,
       componentType: "f32",
@@ -568,6 +722,7 @@ export async function toDocument(
     ...Array.from({ length: skinSets }, (_, set) => [
       {
         id: `joints${set}`,
+        baseVertex: 0,
         data: Uint8Array.from(
           { length: (value.positions.length / 3) * 4 },
           (_, i) =>
@@ -580,6 +735,7 @@ export async function toDocument(
       },
       {
         id: `weights${set}`,
+        baseVertex: 0,
         data: Float32Array.from(
           { length: (value.positions.length / 3) * 4 },
           (_, i) =>
@@ -593,8 +749,51 @@ export async function toDocument(
         enabled: (row: Float64Array) => skinByNode.has(row[0]!),
       },
     ]).flat(),
+    ...morphRows.flatMap((row, i) => [
+      {
+        id: `morph-position-${i}`,
+        baseVertex:
+          nodeRows[row[0]!]![1]! < primitiveRows.length
+            ? primitiveRows[nodeRows[row[0]!]![1]!]![1]!
+            : 0,
+        data: value.morphPositions.slice(row[1]! * 3, (row[1]! + row[2]!) * 3),
+        width: 3,
+        componentType: "f32",
+        semantic: "POSITION",
+        enabled: (p: Float64Array) => p[0] === row[0],
+      },
+      ...(row[8] === 1
+        ? [
+            {
+              id: `morph-normal-${i}`,
+              baseVertex: primitiveRows[nodeRows[row[0]!]![1]!]![1]!,
+              data: value.morphNormals.slice(
+                row[1]! * 3,
+                (row[1]! + row[2]!) * 3,
+              ),
+              width: 3,
+              componentType: "f32",
+              semantic: "NORMAL",
+              enabled: (p: Float64Array) => p[0] === row[0],
+            },
+          ]
+        : []),
+    ]),
   ].filter((a) => primitiveRows.some((row) => a.enabled(row)));
-  for (const { id, data } of resourcesToVerify) {
+  // Source control-point membership is numeric resource data, not oversized JSON metadata.
+  const sourceRefs = morphRows.flatMap((row, i) =>
+    row[11] === 0
+      ? []
+      : [
+          {
+            id: `morph-controlpoints-${i}`,
+            data: Uint32Array.from(
+              value.morphIndices.subarray(row[10]!, row[10]! + row[11]!),
+            ),
+          },
+        ],
+  );
+  for (const { id, data } of [...resourcesToVerify, ...sourceRefs]) {
     if (signal.aborted) throw new FbxImportError("aborted");
     const bytes = data.slice();
     resources.push({
@@ -606,35 +805,45 @@ export async function toDocument(
       payload: new Blob([bytes.buffer], { type: "application/octet-stream" }),
     });
   }
-  const accessors = primitiveRows.flatMap((row, index) =>
-    resourcesToVerify
-      .filter((a) => a.enabled(row))
-      .map(({ id, width, componentType, data }) => {
-        const bounds =
-          id === "positions"
-            ? {
-                min: [Infinity, Infinity, Infinity],
-                max: [-Infinity, -Infinity, -Infinity],
+  const accessors = [
+    ...primitiveRows.flatMap((row, index) =>
+      resourcesToVerify
+        .filter((a) => a.enabled(row))
+        .map(({ id, width, componentType, data, baseVertex }) => {
+          const bounds =
+            id === "positions"
+              ? {
+                  min: [Infinity, Infinity, Infinity],
+                  max: [-Infinity, -Infinity, -Infinity],
+                }
+              : undefined;
+          if (bounds)
+            for (let vertex = row[1]!; vertex < row[1]! + row[2]!; vertex++)
+              for (let k = 0; k < 3; k++) {
+                const number = value.positions[vertex * 3 + k]!;
+                bounds.min[k] = Math.min(bounds.min[k]!, number);
+                bounds.max[k] = Math.max(bounds.max[k]!, number);
               }
-            : undefined;
-        if (bounds)
-          for (let vertex = row[1]!; vertex < row[1]! + row[2]!; vertex++)
-            for (let k = 0; k < 3; k++) {
-              const number = value.positions[vertex * 3 + k]!;
-              bounds.min[k] = Math.min(bounds.min[k]!, number);
-              bounds.max[k] = Math.max(bounds.max[k]!, number);
-            }
-        return {
-          id: `${id}-${index}`,
-          resourceId: id,
-          byteOffset: row[1]! * width * data.BYTES_PER_ELEMENT,
-          count: row[2]!,
-          componentType,
-          elementType: width === 2 ? "vec2" : width === 4 ? "vec4" : "vec3",
-          ...bounds,
-        };
-      }),
-  );
+          return {
+            id: `${id}-${index}`,
+            resourceId: id,
+            byteOffset: (row[1]! - baseVertex) * width * data.BYTES_PER_ELEMENT,
+            count: row[2]!,
+            componentType,
+            elementType: width === 2 ? "vec2" : width === 4 ? "vec4" : "vec3",
+            ...bounds,
+          };
+        }),
+    ),
+    ...sourceRefs.map(({ id, data }) => ({
+      id,
+      resourceId: id,
+      byteOffset: 0,
+      count: data.length,
+      componentType: "u32",
+      elementType: "scalar",
+    })),
+  ];
   const nodes = nodeRows.map((row, i) => {
     const localMatrix = [...local[i]!];
     if (row[0] === -1)
@@ -653,6 +862,13 @@ export async function toDocument(
       ),
       ...(row[2]! > 0 ? { meshId: `mesh-${i}` } : {}),
       ...(skinByNode.has(i) ? { skinId: `skin-${skinByNode.get(i)}` } : {}),
+      ...(perNode.has(i)
+        ? {
+            morphWeights: morphRows.flatMap((m, j) =>
+              m[0] === i ? [{ blendShapeId: `morph-${j}`, weight: m[7]! }] : [],
+            ),
+          }
+        : {}),
       localMatrix,
       metadata: {
         sourceTransform,
@@ -680,7 +896,9 @@ export async function toDocument(
                       topology: "triangles",
                       attributes: [
                         ...resourcesToVerify
-                          .filter((a) => a.enabled(p))
+                          .filter(
+                            (a) => !a.id.startsWith("morph-") && a.enabled(p),
+                          )
                           .map((a) => ({
                             semantic: a.semantic,
                             accessorId: `${a.id}-${j}`,
@@ -792,7 +1010,39 @@ export async function toDocument(
     skeletons,
     joints,
     skins,
-    blendShapes: [],
+    blendShapes: morphRows.map((row, i) => ({
+      id: `morph-${i}`,
+      meshId: `mesh-${row[0]}`,
+      ...(value.morphNames[i] ? { name: value.morphNames[i] } : {}),
+      defaultWeight: row[7]!,
+      deltas: primitiveRows.flatMap((p, j) =>
+        p[0] === row[0]
+          ? [
+              {
+                primitiveId: `primitive-${j}`,
+                positionAccessorId: `morph-position-${i}-${j}`,
+                ...(row[8] === 1
+                  ? { normalAccessorId: `morph-normal-${i}-${j}` }
+                  : {}),
+              },
+            ]
+          : [],
+      ),
+      sourceMetadata: {
+        format: "fbx",
+        sourceChannelIndex: row[3]!,
+        sourceShapeIndex: row[4]!,
+        sourceDeformerIndex: row[9]!,
+        channelName: value.channelNames[i]!,
+        channelWeight: row[6]!,
+        targetWeight: row[5]!,
+        keyIndex: row[12]!,
+        affectedControlPointCount: row[11]!,
+        ...(row[11] === 0
+          ? {}
+          : { affectedControlPointsAccessorId: `morph-controlpoints-${i}` }),
+      },
+    })),
     animations: [],
     analyticGeometry: [],
     bounds: {
@@ -803,7 +1053,7 @@ export async function toDocument(
       sourceFormat: "fbx",
       sourceContentHash: sourceHash,
       converterId: "plasius.gpu-model-fbx",
-      converterVersion: "3",
+      converterVersion: "4",
       metadata: { profile: FBX_IMPORT_PROFILE },
     },
     diagnostics: report.losses.map((loss) => ({
@@ -861,7 +1111,7 @@ export async function toDocument(
       signal,
       limits: {
         maxResourceBytes: 480000,
-        maxAggregateBytes: 2160000,
+        maxAggregateBytes: 5520000,
         timeoutMs: 10000,
       },
     },

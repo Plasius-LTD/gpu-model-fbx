@@ -25,6 +25,12 @@ interface WasmModule {
   _fbx_skins(): number;
   _fbx_clusters(): number;
   _fbx_influences(): number;
+  _fbx_morphs(): number;
+  _fbx_morph_indices(): number;
+  _fbx_morph_positions(): number;
+  _fbx_morph_normals(): number;
+  _fbx_morph_names(): number;
+  _fbx_channel_names(): number;
   _fbx_outstanding(): number;
 }
 const scope = globalThis as unknown as {
@@ -87,7 +93,7 @@ scope.onmessage = async (event: MessageEvent) => {
     if (wasm._fbx_outstanding() !== 0) throw 3;
     const header = wasm.HEAPF64.subarray(
       wasm._fbx_header() / 8,
-      wasm._fbx_header() / 8 + 15,
+      wasm._fbx_header() / 8 + 18,
     );
     for (const [index, min, max] of [
       [0, 3, 30000],
@@ -99,6 +105,9 @@ scope.onmessage = async (event: MessageEvent) => {
       [12, 0, 128],
       [13, 0, 512],
       [14, 0, 8],
+      [15, 0, 128],
+      [16, 0, 120000],
+      [17, 0, 120000],
     ])
       if (
         !Number.isInteger(header[index!]) ||
@@ -162,8 +171,30 @@ scope.onmessage = async (event: MessageEvent) => {
       wasm._fbx_influences() / 8,
       wasm._fbx_influences() / 8 + header[0]! * 16,
     );
+    const morphTable = wasm.HEAPF64.slice(
+      wasm._fbx_morphs() / 8,
+      wasm._fbx_morphs() / 8 + header[15]! * 14,
+    );
+    const morphIndices = wasm.HEAPF64.slice(
+      wasm._fbx_morph_indices() / 8,
+      wasm._fbx_morph_indices() / 8 + header[17]!,
+    );
+    const morphPositions = wasm.HEAPF32.slice(
+      wasm._fbx_morph_positions() / 4,
+      wasm._fbx_morph_positions() / 4 + header[16]! * 3,
+    );
+    const morphNormals = wasm.HEAPF32.slice(
+      wasm._fbx_morph_normals() / 4,
+      wasm._fbx_morph_normals() / 4 + header[16]! * 3,
+    );
     const result: ParsedFbx = {
-      protocol: 3,
+      protocol: 4,
+      morphTable,
+      morphIndices,
+      morphPositions,
+      morphNormals,
+      morphNames: names(wasm._fbx_morph_names(), header[15]!),
+      channelNames: names(wasm._fbx_channel_names(), header[15]!),
       poseTable,
       poseNames: names(wasm._fbx_pose_names(), header[14]!),
       jointTable,
@@ -186,6 +217,10 @@ scope.onmessage = async (event: MessageEvent) => {
       axes: [header[4]!, header[5]!, header[6]!],
     };
     scope.postMessage({ result }, [
+      morphTable.buffer,
+      morphIndices.buffer,
+      morphPositions.buffer,
+      morphNormals.buffer,
       poseTable.buffer,
       jointTable.buffer,
       skinTable.buffer,
@@ -200,7 +235,7 @@ scope.onmessage = async (event: MessageEvent) => {
     ]);
   } catch (error) {
     scope.postMessage({
-      error: typeof error === "number" && error >= 1 && error <= 7 ? error : 5,
+      error: typeof error === "number" && error >= 1 && error <= 9 ? error : 5,
     });
   } finally {
     if (pointer) wasm!._free(pointer);

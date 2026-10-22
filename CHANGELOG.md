@@ -10,7 +10,7 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Preserve bounded sparse FBX morph positions/normals, source membership, channels, in-between targets and effective defaults through canonical renderer contracts; reject unsupported morph semantics explicitly.
 
 - **Changed**
   - (placeholder)

@@ -9,3 +9,4 @@
 - [ADR-0007: Bounded Browser FBX Import](./adr-0007-bounded-browser-fbx-import.md)
 - [ADR-0008: Static FBX Scene Fidelity](./adr-0008-static-scene-fidelity.md)
 - [ADR-0009: Linear FBX Skin Bindings](./adr-0009-linear-skin-bindings.md)
+- [ADR-0010: Morph Channels and Targets](./adr-0010-morph-channels.md)
