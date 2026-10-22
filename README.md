@@ -6,9 +6,9 @@ This repository is the dedicated package boundary defined by ADR 0094.
 
 ## Supported import profile
 
-`createFbxImporter` imports the `plasius.fbx-linear-skin/3` profile: FBX 7400
+`createFbxImporter` imports the `plasius.fbx-morph/4` profile: FBX 7400
 ASCII or binary (including compressed arrays), static mesh instances and source
-hierarchies, bones and linear skin clusters. Polygons of 3–64 corners are triangulated by pinned ufbx, with
+hierarchies, bones, linear skin clusters and sparse morph channels/targets. Polygons of 3–64 corners are triangulated by pinned ufbx, with
 per-corner normals/UV0 and per-face material groups preserved. The profile allows
 64 source nodes, 32 materials, 128 material groups and 10,000 triangles across all
 instances. Positions use Float32 resources; matrices retain double precision.
@@ -33,9 +33,9 @@ shading-model name are retained; arbitrary custom shader graphs are not preserve
 Consent never admits unsupported scene elements or resource acquisition.
 
 Textures, additional UV sets, vertex colours/tangents, user properties,
-morphs, animation, cameras, lights and other element kinds still fail with
+animation, cameras, lights and other element kinds still fail with
 `unsupported-profile`. Unattached meshes and unsupported scenes never become
-empty models. Texture/morph/animation/export/repair work remains in tasks26–30;
+empty models. Texture/animation/export/repair work remains in tasks27–30;
 this package does not yet implement general DCC interchange or an exporter.
 The legacy `packageName`/`packageBootstrap` metadata remains compatible.
 
@@ -62,8 +62,29 @@ violations return `limit-exceeded`. No loss consent overrides these denials.
 See [ADR0009](docs/adrs/adr-0009-linear-skin-bindings.md) and
 [the skin qualification](docs/design/fbx-skin-qualification.md) for conventions,
 limits and test evidence. Static profile2 inputs remain supported; the exported
-profile literal and private worker protocol advance to3, requiring matching
+profile literal and private worker protocol advance to4, requiring matching
 package worker assets and recompilation of literal-typed profile consumers.
+
+Morphs retain sparse source control-point membership in verified u32 accessors,
+expanded position/normal deltas, target/channel names and source identities.
+`blendShapes` exposes independent targets; node `morphWeights` and shape
+`defaultWeight` expose effective coefficients at the authored channel default.
+Source metadata retains `channelWeight`, `targetWeight`, `keyIndex`,
+`affectedControlPointCount` and `affectedControlPointsAccessorId` when nonempty.
+Positive increasing in-between thresholds preserve every target, including targets
+with zero default contribution. Apply morphs in mesh space before skinning or the
+scene transform; normalize the blended normal. Deltas receive geometric linear
+transforms once and never receive translation. Node matrices carry any remaining
+unit/basis conversion. Bounds describe the undeformed base; hosts own posed bounds.
+
+At most4 targets per instance,128 instance-targets,120000 expanded target corners
+and120000 source membership references are admitted. Stacked/layered deformers,
+weighted-offset extensions, orphan elements and nonpositive/duplicate thresholds
+fail with `unsupported-morph`; invalid sparse data fails with `invalid-morph` or
+`invalid-fbx`. Normal offsets require base normals. No consent bakes or drops
+unsupported targets. See [ADR0010](docs/adrs/adr-0010-morph-channels.md) and
+[the morph qualification](docs/design/fbx-morph-qualification.md). FBX take/layer
+animation remains task27; this profile preserves authored morph defaults.
 
 ```ts
 import { createFbxImporter } from "@plasius/gpu-model-fbx";
@@ -100,8 +121,8 @@ File-provider injections must enforce the supplied byte ceiling while reading.
 50,000 allocation attempts and a 10-second whole-operation deadline. Optional
 `limits` can only tighten these values. The parser has a fixed 64 MiB Wasm memory,
 1 MiB stack and 64-node depth ceiling. Each attribute buffer is at most
-480,000 bytes; all verified attribute buffers total at most 2,160,000 bytes.
-Native node/material/primitive/name and skeletal tables have fixed capacities.
+480,000 bytes; all verified attribute buffers total at most 5,520,000 bytes.
+Native node/material/primitive/name skeletal and morph tables have fixed capacities.
 Each importer admits one operation at a time, creates one fresh worker, and
 terminates it on success, failure, abort, timeout or disposal. It retains no model
 cache. Returned model payloads belong to the caller; no engine GC timing claim

@@ -129,3 +129,14 @@ no dependency changes or owning-package extension is needed. Complete weight
 rows and accessor payloads agree; per-skin inverse binds preserve shared joint
 identity. Unsupported deformation composition and joint shear reject explicitly.
 Task25 does not complete remaining tasks26–30 or Feature1151/coordinator1.
+
+## Task26 morph channels and targets
+
+Task26 extends the supported profile through [ADR0010](../adrs/adr-0010-morph-channels.md)
+and [the morph qualification](../design/fbx-morph-qualification.md). Published
+core0.6.0/runtime0.3.2/renderer0.4.0 cover the admitted independent-target/default
+representation. Source channel thresholds/weights/identity and numeric sparse
+membership remain available; no dependency version change. Resource membership
+uses verified u32 accessors to respect canonical JSON metadata limits. Fixed
+aggregate canonical bytes are5520000; protocol/native capacities remain bounded.
+Task26 does not complete remaining tasks27–30 or Feature1151/coordinator1.

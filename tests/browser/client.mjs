@@ -98,6 +98,8 @@ async function run() {
   checks.push("bounded-url-acquisition");
   const { checkGeometry } = await import("./geometry.mjs");
   checks.push(...(await checkGeometry(importer, fixture, check)));
+  const { checkMorphs } = await import("./morph.mjs");
+  checks.push(...(await checkMorphs(importer, fixture, check)));
   const { checkSkins } = await import("./skin.mjs");
   checks.push(...(await checkSkins(importer, fixture, check)));
   await rejects(

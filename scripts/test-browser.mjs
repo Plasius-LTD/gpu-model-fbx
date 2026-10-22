@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { build } from "esbuild";
 import { chromium } from "playwright-core";
 import { ascii, binary } from "../tests/fixtures/fbx.ts";
+import { morphFixture } from "../tests/fixtures/morph.ts";
 import { skinFixture } from "../tests/fixtures/skin.ts";
 import { sceneFixture } from "../tests/fixtures/scene.ts";
 const cache = path.resolve(
@@ -28,6 +29,12 @@ await build({
   outdir: cache,
 });
 const fixtures = JSON.stringify({
+  morph: [...morphFixture()],
+  morphNegative: [...morphFixture({ weight: -25 })],
+  morphCentimetres: [...morphFixture({ centimetres: true })],
+  morphInstances: [...morphFixture({ instances: true })],
+  morphSkin: [...morphFixture({ skin: true })],
+  morphInbetween: [...morphFixture({ inbetween: true })],
   skin: [...skinFixture()],
   skinCentimetres: [...skinFixture({ centimetres: true })],
   skinMultiple: [...skinFixture({ multiple: true })],

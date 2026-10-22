@@ -21,11 +21,17 @@ void fbx_test_continue(int value) { native_continue = value; }
 #define PRIMITIVE_STRIDE 6
 #define MATERIAL_STRIDE 126
 static float positions[90000], normals[90000], uvs[60000];
-static double header[15], nodes[64*NODE_STRIDE], primitives[128*PRIMITIVE_STRIDE], materials[32*MATERIAL_STRIDE];
+static double header[18], nodes[64*NODE_STRIDE], primitives[128*PRIMITIVE_STRIDE], materials[32*MATERIAL_STRIDE];
 static char node_names[64][513], mesh_names[64][513], material_names[32][513], material_shaders[32][129];
 static double joint_table[64*11], skin_table[64*3], cluster_table[128*39], influence_table[30000*16];
 static double pose_table[512*14];
 static char pose_names[8][513];
+/* Four targets per instance,120000 expanded target corners and source refs. */
+#define MORPH_STRIDE 14
+static double morph_table[128*MORPH_STRIDE], morph_indices[120000];
+static float morph_positions[360000], morph_normals[360000];
+static char morph_names[128][513], channel_names[128][513];
+static unsigned morph_count, morph_corners, morph_refs;
 static int joint_map[64];
 static unsigned joint_count, skin_count, cluster_count;
 static size_t live_bytes, attempts, memory_ceiling, allocation_ceiling;
@@ -61,6 +67,12 @@ double *fbx_joints(void) { return joint_table; }
 double *fbx_skins(void) { return skin_table; }
 double *fbx_clusters(void) { return cluster_table; }
 double *fbx_influences(void) { return influence_table; }
+double *fbx_morphs(void) { return morph_table; }
+double *fbx_morph_indices(void) { return morph_indices; }
+float *fbx_morph_positions(void) { return morph_positions; }
+float *fbx_morph_normals(void) { return morph_normals; }
+char *fbx_morph_names(void) { return morph_names[0]; }
+char *fbx_channel_names(void) { return channel_names[0]; }
 unsigned fbx_outstanding(void) { return (unsigned)live_bytes; }
 static double determinant(ufbx_matrix m) {
   return m.m00*(m.m11*m.m22-m.m12*m.m21)-m.m01*(m.m10*m.m22-m.m12*m.m20)+m.m02*(m.m10*m.m21-m.m11*m.m20);
@@ -78,7 +90,7 @@ static int node_index(ufbx_scene *scene, ufbx_node *node) {
 }
 /* Safe finite codes; no upstream exception strings, source text or resource paths. */
 int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigned allocation_limit) {
-  memset(header,0,sizeof(header)); joint_count=skin_count=cluster_count=0;
+  memset(header,0,sizeof(header)); joint_count=skin_count=cluster_count=morph_count=morph_corners=morph_refs=0;
   for (unsigned i=0;i<64;i++) joint_map[i]=-1;
   if (live_bytes || !length || length>8388608 || !memory_limit || memory_limit>25165824 || !allocation_limit || allocation_limit>50000) return 3;
   memory_ceiling=memory_limit; allocation_ceiling=allocation_limit; attempts=0; budget_failed=0;
@@ -99,7 +111,7 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
   if (!deadline_ok()) { result=4; goto done; }
   if (scene->metadata.version!=7400 || !ufbx_coordinate_axes_valid(scene->settings.axes) || !isfinite(scene->settings.unit_meters) || scene->settings.unit_meters<=0 || scene->metadata.warnings.count) goto done;
   if (scene->nodes.count<2 || !scene->meshes.count || scene->nodes.data[0]!=scene->root_node) goto done;
-  if (scene->nodes.count>65 || scene->materials.count>32 || scene->skin_deformers.count>64 || scene->skin_clusters.count>128) { result=3; goto done; }
+  if (scene->nodes.count>65 || scene->materials.count>32 || scene->skin_deformers.count>64 || scene->skin_clusters.count>128 || scene->blend_deformers.count>64 || scene->blend_channels.count>128 || scene->blend_shapes.count>128) { result=3; goto done; }
   for (size_t i=0;i<scene->meshes.count;i++) if (!scene->meshes.data[i]->instances.count) goto done;
   for(size_t si=0;si<scene->skin_deformers.count;si++) {
     int used=0;for(size_t mi=0;mi<scene->meshes.count;mi++)for(size_t j=0;j<scene->meshes.data[mi]->skin_deformers.count;j++)if(scene->meshes.data[mi]->skin_deformers.data[j]==scene->skin_deformers.data[si])used=1;
@@ -109,9 +121,22 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
     int used=0;for(size_t si=0;si<scene->skin_deformers.count;si++)for(size_t j=0;j<scene->skin_deformers.data[si]->clusters.count;j++)if(scene->skin_deformers.data[si]->clusters.data[j]==scene->skin_clusters.data[ci])used=1;
     if(!used)goto done;
   }
+  /* No orphan morph element may disappear from the canonical result. */
+  for(size_t bi=0;bi<scene->blend_deformers.count;bi++) {
+    int used=0;for(size_t mi=0;mi<scene->meshes.count;mi++)for(size_t j=0;j<scene->meshes.data[mi]->blend_deformers.count;j++)if(scene->meshes.data[mi]->blend_deformers.data[j]==scene->blend_deformers.data[bi])used=1;
+    if(!used){result=8;goto done;}
+  }
+  for(size_t ci=0;ci<scene->blend_channels.count;ci++) {
+    int used=0;for(size_t bi=0;bi<scene->blend_deformers.count;bi++)for(size_t j=0;j<scene->blend_deformers.data[bi]->channels.count;j++)if(scene->blend_deformers.data[bi]->channels.data[j]==scene->blend_channels.data[ci])used=1;
+    if(!used){result=8;goto done;}
+  }
+  for(size_t si=0;si<scene->blend_shapes.count;si++) {
+    int used=0;for(size_t ci=0;ci<scene->blend_channels.count;ci++)for(size_t j=0;j<scene->blend_channels.data[ci]->keyframes.count;j++)if(scene->blend_channels.data[ci]->keyframes.data[j].shape==scene->blend_shapes.data[si])used=1;
+    if(!used){result=8;goto done;}
+  }
   for (size_t i=0;i<scene->elements.count;i++) {
     ufbx_element *element=scene->elements.data[i];
-    if (element->type!=UFBX_ELEMENT_NODE && element->type!=UFBX_ELEMENT_MESH && element->type!=UFBX_ELEMENT_MATERIAL && element->type!=UFBX_ELEMENT_BONE && element->type!=UFBX_ELEMENT_SKIN_DEFORMER && element->type!=UFBX_ELEMENT_SKIN_CLUSTER && element->type!=UFBX_ELEMENT_POSE) goto done;
+    if (element->type!=UFBX_ELEMENT_NODE && element->type!=UFBX_ELEMENT_MESH && element->type!=UFBX_ELEMENT_MATERIAL && element->type!=UFBX_ELEMENT_BONE && element->type!=UFBX_ELEMENT_SKIN_DEFORMER && element->type!=UFBX_ELEMENT_SKIN_CLUSTER && element->type!=UFBX_ELEMENT_POSE && element->type!=UFBX_ELEMENT_BLEND_DEFORMER && element->type!=UFBX_ELEMENT_BLEND_CHANNEL && element->type!=UFBX_ELEMENT_BLEND_SHAPE) goto done;
     for (size_t j=0;j<element->props.props.count;j++) if (element->props.props.data[j].flags & UFBX_PROP_FLAG_USER_DEFINED) goto done;
   }
   if (scene->poses.count>8) { result=3; goto done; }
@@ -187,8 +212,40 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
     ufbx_mesh *mesh=node->mesh; if (!mesh) continue;
     if (mesh->name.length>512 || memchr(mesh->name.data,0,mesh->name.length)) goto done;
     memcpy(mesh_names[ni-1],mesh->name.data,mesh->name.length); mesh_names[ni-1][mesh->name.length]=0;
-    if (!mesh->num_faces || mesh->vertex_color.exists || mesh->vertex_tangent.exists || mesh->vertex_bitangent.exists || mesh->uv_sets.count>1 || mesh->blend_deformers.count) goto done;
+    if (!mesh->num_faces || mesh->vertex_color.exists || mesh->vertex_tangent.exists || mesh->vertex_bitangent.exists || mesh->uv_sets.count>1) goto done;
     if (mesh->num_triangles>10000 || cursor/3+mesh->num_triangles*3>30000) { result=3; goto done; }
+    unsigned first_morph=morph_count, node_begin=cursor/3;
+    ufbx_blend_shape *node_shapes[4];
+    if(mesh->blend_deformers.count) {
+      if(mesh->num_vertices>30000){result=3;goto done;}
+      if(mesh->blend_deformers.count!=1){result=8;goto done;}
+      ufbx_blend_deformer *blend=mesh->blend_deformers.data[0];
+      if(!blend->channels.count){result=8;goto done;}
+      for(size_t ci=0;ci<blend->channels.count;ci++) {
+        ufbx_blend_channel *channel=blend->channels.data[ci];
+        if(!channel->keyframes.count || !isfinite(channel->weight) || fabs(channel->weight)>1000000 || channel->name.length>512 || memchr(channel->name.data,0,channel->name.length)){result=8;goto done;}
+        double threshold=0;
+        for(size_t ki=0;ki<channel->keyframes.count;ki++) {
+          ufbx_blend_keyframe key=channel->keyframes.data[ki];ufbx_blend_shape *shape=key.shape;
+          if(morph_count>=128 || morph_count-first_morph>=4 || morph_corners+mesh->num_triangles*3>120000 || shape->num_offsets>30000 || morph_refs+shape->num_offsets>120000){result=3;goto done;}
+          if(!isfinite(key.target_weight) || key.target_weight<=threshold || key.target_weight>1000000 || !isfinite(key.effective_weight) || fabs(key.effective_weight)>1000000 || shape->offset_weights.count || ufbx_dom_find(shape->element.dom_node,"Weights") || shape->name.length>512 || memchr(shape->name.data,0,shape->name.length)){result=8;goto done;}
+          threshold=key.target_weight;
+          if(shape->num_offsets!=shape->offset_vertices.count || shape->num_offsets!=shape->position_offsets.count || (shape->normal_offsets.count && (shape->normal_offsets.count!=shape->num_offsets || !mesh->vertex_normal.exists))){result=9;goto done;}
+          for(size_t oi=0;oi<shape->num_offsets;oi++) {
+            unsigned v=shape->offset_vertices.data[oi];
+            if(v>=mesh->num_vertices || (oi && v<=shape->offset_vertices.data[oi-1]) || !finite_vec3(shape->position_offsets.data[oi]) || (shape->normal_offsets.count && !finite_vec3(shape->normal_offsets.data[oi]))){result=9;goto done;}
+            morph_indices[morph_refs+oi]=v;
+          }
+          double *out=&morph_table[morph_count*MORPH_STRIDE];
+          out[0]=ni-1;out[1]=morph_corners;out[2]=mesh->num_triangles*3;out[3]=channel->typed_id;out[4]=shape->typed_id;
+          out[5]=key.target_weight;out[6]=channel->weight;out[7]=key.effective_weight;out[8]=shape->normal_offsets.count!=0;out[9]=blend->typed_id;out[10]=morph_refs;out[11]=shape->num_offsets;out[12]=ki;out[13]=mesh->num_vertices;
+          memcpy(morph_names[morph_count],shape->name.data,shape->name.length);morph_names[morph_count][shape->name.length]=0;
+          memcpy(channel_names[morph_count],channel->name.data,channel->name.length);channel_names[morph_count][channel->name.length]=0;
+          node_shapes[morph_count-first_morph]=shape;
+          morph_refs+=shape->num_offsets;morph_corners+=mesh->num_triangles*3;morph_count++;
+        }
+      }
+    }
     ufbx_skin_deformer *skin=NULL; unsigned first_cluster=cluster_count;
     if (mesh->skin_deformers.count) {
       if (mesh->skin_deformers.count!=1) { result=6; goto done; }
@@ -255,6 +312,25 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
             unsigned vi=mesh->vertex_indices.data[index]; ufbx_skin_vertex v=skin->vertices.data[vi];
             for (unsigned wi=0;wi<v.num_weights;wi++) { ufbx_skin_weight w=skin->weights.data[v.weight_begin+wi]; influence[wi]=w.cluster_index; influence[8+wi]=w.weight; }
           }
+          for(unsigned mi=first_morph;mi<morph_count;mi++) {
+            ufbx_blend_shape *shape=node_shapes[mi-first_morph];
+            unsigned vi=mesh->vertex_indices.data[index];
+            uint32_t oi=ufbx_get_blend_shape_offset_index(shape,vi);
+            ufbx_vec3 dp={0},dn={0};
+            if(oi!=UFBX_NO_INDEX) {
+              dp=ufbx_transform_direction(&node->geometry_to_node,shape->position_offsets.data[oi]);
+              if(shape->normal_offsets.count) {
+                dn=ufbx_transform_direction(&normal_matrix,shape->normal_offsets.data[oi]);
+                ufbx_vec3 base=ufbx_transform_direction(&normal_matrix,ufbx_get_vertex_vec3(&mesh->vertex_normal,index));
+                double len=sqrt(base.x*base.x+base.y*base.y+base.z*base.z);
+                if(!isfinite(len) || len<1e-12){result=9;goto done;}
+                for(unsigned k=0;k<3;k++)dn.v[k]/=len;
+              }
+            }
+            if(!finite_vec3(dp) || !finite_vec3(dn)){result=9;goto done;}
+            unsigned dst=((unsigned)morph_table[mi*MORPH_STRIDE+1]+cursor/3-node_begin)*3;
+            for(unsigned k=0;k<3;k++){morph_positions[dst+k]=(float)dp.v[k];morph_normals[dst+k]=(float)dn.v[k];}
+          }
           cursor+=3;
         }
       }
@@ -269,7 +345,7 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
   if (!cursor) goto done;
   header[0]=cursor/3; header[1]=scene->metadata.version; header[2]=scene->metadata.ascii; header[3]=scene->settings.unit_meters;
   header[4]=scene->settings.axes.right; header[5]=scene->settings.axes.up; header[6]=scene->settings.axes.front;
-  header[7]=scene->nodes.count-1; header[8]=primitive_count; header[9]=scene->materials.count; header[10]=joint_count; header[11]=skin_count; header[12]=cluster_count; result=0;
+  header[7]=scene->nodes.count-1; header[8]=primitive_count; header[9]=scene->materials.count; header[15]=morph_count;header[16]=morph_corners;header[17]=morph_refs;header[10]=joint_count; header[11]=skin_count; header[12]=cluster_count; result=0;
 done:
   ufbx_free_scene(scene); if (result) memset(header,0,sizeof(header)); return result;
 }

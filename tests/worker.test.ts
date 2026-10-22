@@ -14,7 +14,7 @@ vi.mock("../dist/ufbx.mjs", () => ({
     const h = new Float64Array(memory);
     const p = new Float32Array(memory);
     h.set([state.count, 7400, 1, 1, 0, 2, 4, 1, 1, 0], 0);
-    p.set([0, 0, 0, 1, 0, 0, 0, 1, 0], 32);
+    p.set([0, 0, 0, 1, 0, 0, 0, 1, 0], 64);
     return {
       HEAPU8: new Uint8Array(memory),
       HEAPF64: h,
@@ -23,6 +23,12 @@ vi.mock("../dist/ufbx.mjs", () => ({
       _free: (ptr: number) => state.freed.push(ptr),
       _fbx_parse: () => state.code,
       _fbx_outstanding: () => state.outstanding,
+      _fbx_morphs: () => 32768,
+      _fbx_morph_indices: () => 32768,
+      _fbx_morph_positions: () => 32768,
+      _fbx_morph_normals: () => 32768,
+      _fbx_morph_names: () => 32768,
+      _fbx_channel_names: () => 32768,
       _fbx_poses: () => 32768,
       _fbx_pose_names: () => 32768,
       _fbx_joints: () => 32768,
@@ -30,7 +36,7 @@ vi.mock("../dist/ufbx.mjs", () => ({
       _fbx_clusters: () => 32768,
       _fbx_influences: () => 40000,
       _fbx_header: () => 0,
-      _fbx_output: () => 128,
+      _fbx_output: () => 256,
       _fbx_normals: () => 512,
       _fbx_uvs: () => 1024,
       _fbx_nodes: () => 2048,
@@ -95,7 +101,7 @@ describe("worker protocol", () => {
     expect(send.mock.calls[0]?.[0]).toEqual({ error: data === null ? 5 : 1 });
     expect(state.freed).toEqual([]);
   });
-  it.each([1, 2, 3, 4, 6, 7, 99])(
+  it.each([1, 2, 3, 4, 6, 7, 8, 9, 99])(
     "redacts native failure %i and frees input",
     async (code) => {
       state.code = code;
@@ -119,7 +125,7 @@ describe("worker protocol", () => {
     expect(
       (await run({ ...request(), cancel: new SharedArrayBuffer(4) })).mock
         .calls[0]?.[0].result.protocol,
-    ).toBe(3);
+    ).toBe(4);
   });
   it("denies ambient network and script transports", async () => {
     await run(request());

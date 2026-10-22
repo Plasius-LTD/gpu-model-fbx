@@ -63,7 +63,7 @@ const flags = [
   "-sEXPORT_ES6=1",
   "-sSINGLE_FILE=1",
   "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPF32,HEAPF64",
-  "-sEXPORTED_FUNCTIONS=_malloc,_free,_fbx_parse,_fbx_header,_fbx_output,_fbx_normals,_fbx_uvs,_fbx_nodes,_fbx_primitives,_fbx_materials,_fbx_node_names,_fbx_material_names,_fbx_mesh_names,_fbx_material_shaders,_fbx_poses,_fbx_pose_names,_fbx_joints,_fbx_skins,_fbx_clusters,_fbx_influences,_fbx_outstanding",
+  "-sEXPORTED_FUNCTIONS=_malloc,_free,_fbx_parse,_fbx_header,_fbx_output,_fbx_normals,_fbx_uvs,_fbx_nodes,_fbx_primitives,_fbx_materials,_fbx_node_names,_fbx_material_names,_fbx_mesh_names,_fbx_material_shaders,_fbx_poses,_fbx_pose_names,_fbx_joints,_fbx_skins,_fbx_clusters,_fbx_influences,_fbx_morphs,_fbx_morph_indices,_fbx_morph_positions,_fbx_morph_normals,_fbx_morph_names,_fbx_channel_names,_fbx_outstanding",
   "-o",
   "ufbx.mjs",
 ];

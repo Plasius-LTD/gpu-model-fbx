@@ -6,7 +6,7 @@ export const FBX_IMPORT_LIMITS = Object.freeze({
   timeoutMs: 10_000,
 });
 export const FBX_IMPORT_FEATURE_FLAG = "gpu.model.conversion.enabled" as const;
-export const FBX_IMPORT_PROFILE = "plasius.fbx-linear-skin/3" as const;
+export const FBX_IMPORT_PROFILE = "plasius.fbx-morph/4" as const;
 export type FbxImportLimits = {
   readonly [K in keyof typeof FBX_IMPORT_LIMITS]: number;
 };
@@ -22,7 +22,9 @@ export type FbxImportErrorCode =
   | "limit-exceeded"
   | "worker-failed"
   | "unsupported-skinning"
-  | "invalid-skin-weights";
+  | "invalid-skin-weights"
+  | "unsupported-morph"
+  | "invalid-morph";
 /** Bounded codes deliberately exclude source content and upstream error text. */
 export class FbxImportError extends Error {
   public constructor(
@@ -35,7 +37,13 @@ export class FbxImportError extends Error {
 }
 /** Private, bounded worker protocol. It carries no canonical verification brand. */
 export interface ParsedFbx {
-  readonly protocol: 3;
+  readonly protocol: 4;
+  readonly morphTable: Float64Array;
+  readonly morphIndices: Float64Array;
+  readonly morphPositions: Float32Array;
+  readonly morphNormals: Float32Array;
+  readonly morphNames: readonly string[];
+  readonly channelNames: readonly string[];
   readonly poseTable: Float64Array;
   readonly poseNames: readonly string[];
   readonly jointTable: Float64Array;
