@@ -31,3 +31,7 @@ source/compiler, artifact hashes, clean installs and registry signatures for
 reproducibility/dependency health. UI/accessibility/SEO and backend data/ACA
 secretrefs are N/A for this package-only delivery. Browser qualification covers
 the tested engine/isolation modes without claiming all devices or DCC formats.
+
+Unsupported animation rejection includes a canonical strict diagnostic report
+(`fbx-animation-unsupported`) without source text. This blocking record remains
+rejected with loss consent: unsupported constraints are never silently baked.

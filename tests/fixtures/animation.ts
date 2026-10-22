@@ -17,6 +17,7 @@ export interface AnimationOptions extends MorphOptions {
   keyCount?: number;
   layerWeight?: number;
   muted?: boolean;
+  constraint?: boolean;
   animatedWeight?: boolean;
   curveEnd?: number;
 }
@@ -29,6 +30,10 @@ export function animationFixture(o: AnimationOptions = {}): Uint8Array {
   let text = new TextDecoder().decode(
     o.morph ? morphFixture(o) : o.skin ? skinFixture(o) : sceneFixture(o),
   );
+  if (o.constraint)
+    objects.push(
+      `Constraint: 60000, "Constraint::Guard", "Position" { Type: "Position From Positions" }`,
+    );
   for (let i = 0; i < (o.extraNodes ?? 0); i++) {
     objects.push(
       `Model: ${50000 + i}, "Model::Extra${i}", "Null" { Version: 232 }`,

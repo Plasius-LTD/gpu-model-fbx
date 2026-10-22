@@ -320,3 +320,19 @@ describe("Task27 boundary profiles", () => {
     });
   });
 });
+
+it.each([false, true])(
+  "reports unsupported constraints through the canonical rejection ledger (consent=%s)",
+  async (consent) => {
+    await expect(load({ constraint: true }, consent)).rejects.toMatchObject({
+      code: "unsupported-animation",
+      diagnosticReport: {
+        accepted: false,
+        diagnostics: [
+          { kind: "unsupported", code: "fbx-animation-unsupported" },
+        ],
+        losses: [],
+      },
+    });
+  },
+);

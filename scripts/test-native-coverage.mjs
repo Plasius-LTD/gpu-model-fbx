@@ -132,6 +132,7 @@ for (const o of [
 for (const o of [{ duration: 20 }, { takes: 9 }, { keyCount: 4097 }])
   parse(animationFixture(o), 3);
 for (const o of [
+  { constraint: true },
   { muted: true },
   { animatedWeight: true },
   { property: "Visibility" },

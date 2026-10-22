@@ -1,6 +1,6 @@
 import type { GpuModelDocument, ModelSource } from "@plasius/gpu-model-core";
 import type { RuntimeDependencies } from "@plasius/gpu-model-runtime";
-import { loadRuntime } from "./modules.js";
+import { loadCore, loadRuntime } from "./modules.js";
 import {
   FBX_IMPORT_FEATURE_FLAG,
   FBX_IMPORT_LIMITS,
@@ -246,6 +246,30 @@ export function createFbxImporter(options: FbxImporterOptions): FbxImporter {
           });
         } catch (error) {
           check();
+          if (
+            error instanceof FbxImportError &&
+            error.code === "unsupported-animation"
+          ) {
+            const { evaluateGpuModelDiagnostics } = await loadCore();
+            check();
+            throw new FbxImportError(
+              "unsupported-animation",
+              evaluateGpuModelDiagnostics({
+                standard: "fbx",
+                mode: "strict",
+                allowLoss: operation.allowAnimationLoss === true,
+                issues: [
+                  {
+                    kind: "unsupported",
+                    code: "fbx-animation-unsupported",
+                    path: "/animations",
+                    message:
+                      "Animation constraints, properties, timing, layer controls or transforms exceed the declared profile. No unsupported semantics were baked or omitted; retain the original source for a qualified adapter.",
+                  },
+                ],
+              }),
+            );
+          }
           if (error instanceof FbxImportError) throw error;
           throw new FbxImportError(
             error instanceof Error &&

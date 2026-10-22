@@ -234,3 +234,7 @@ the prepared SHA is the exact `main` head after successful push-triggered CI.
 The completed `0.1.0` bootstrap path has been removed; subsequent releases must
 use npm trusted publishing.
 <!-- END PLASIUS RELEASE INTEGRITY -->
+
+Unsupported animation rejection includes a canonical strict diagnostic report
+(`fbx-animation-unsupported`) without source text. This blocking record remains
+rejected with loss consent: unsupported constraints are never silently baked.

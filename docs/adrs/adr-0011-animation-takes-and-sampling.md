@@ -112,3 +112,7 @@ before resource access/allocation; disabled, enabled, rollback and restoration
 remain tested. Disable that stored flag for rollback; no local env override or
 capability substitute. Package-only: UI/accessibility, SEO, backend transactions
 and ACA sensitive secretrefs are N/A; no site/server deployment is performed.
+
+Unsupported animation rejection includes a canonical strict diagnostic report
+(`fbx-animation-unsupported`) without source text. This blocking record remains
+rejected with loss consent: unsupported constraints are never silently baked.
