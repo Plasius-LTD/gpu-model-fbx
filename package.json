@@ -1,6 +1,6 @@
 {
   "name": "@plasius/gpu-model-fbx",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Bounded browser-worker FBX scene, skin and morph import through verified canonical GPU model contracts.",
   "type": "module",
   "sideEffects": false,
