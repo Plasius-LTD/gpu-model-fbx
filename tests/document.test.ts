@@ -16,7 +16,13 @@ function message(): ParsedFbx {
     nodeTable[62] =
       1;
   return {
-    protocol: 2,
+    protocol: 3,
+    poseTable: new Float64Array(),
+    poseNames: [],
+    jointTable: new Float64Array(),
+    skinTable: new Float64Array(),
+    clusterTable: new Float64Array(),
+    influenceTable: new Float64Array(48),
     positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
     normals: new Float32Array(9),
     uvs: new Float32Array(6),
@@ -131,5 +137,72 @@ describe("untrusted static-scene protocol admission", () => {
     await expect(convert(message(), abort.signal)).rejects.toMatchObject({
       code: "aborted",
     });
+  });
+});
+
+function skinnedMessage(): ParsedFbx {
+  const v = message();
+  const jointTable = new Float64Array([0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1]);
+  const clusterTable = new Float64Array(39);
+  for (const base of [3, 15, 27])
+    for (const k of [0, 4, 8]) clusterTable[base + k] = 1;
+  const influenceTable = new Float64Array(48);
+  for (let i = 0; i < 3; i++) influenceTable[i * 16 + 8] = 1;
+  return {
+    ...v,
+    jointTable,
+    skinTable: new Float64Array([0, 0, 1]),
+    clusterTable,
+    influenceTable,
+  };
+}
+describe("untrusted skeletal table admission", () => {
+  it("snapshots all skeletal tables before yielding", async () => {
+    const input = skinnedMessage();
+    const p = convert(input);
+    input.influenceTable.fill(1);
+    input.jointTable.fill(1);
+    input.skinTable.fill(1);
+    input.clusterTable.fill(1);
+    const d = await p;
+    expect(d.skins[0]!.weightSets[0]!.weights[0]).toEqual([1, 0, 0, 0]);
+  });
+  it.each([
+    (v: ParsedFbx) => ({ ...v, jointTable: new Float64Array(12) }),
+    (v: ParsedFbx) => ({ ...v, skinTable: new Float64Array(4) }),
+    (v: ParsedFbx) => ({ ...v, clusterTable: new Float64Array(40) }),
+    (v: ParsedFbx) => ({ ...v, influenceTable: new Float64Array(47) }),
+    (v: ParsedFbx) => ({
+      ...v,
+      influenceTable: new Float64Array(new SharedArrayBuffer(48 * 8)),
+    }),
+    (v: ParsedFbx) => ({ ...v, poseNames: ["bad\n"] }),
+    (v: ParsedFbx) => ({ ...v, poseNames: ["unused"] }),
+    (v: ParsedFbx) => ({ ...v, poseTable: new Float64Array(14) }),
+  ])("rejects malformed skeletal shapes%s", async (mutate) => {
+    await expect(convert(mutate(skinnedMessage()))).rejects.toMatchObject({
+      code: "worker-failed",
+    });
+  });
+  it.each([
+    ["jointTable", 0, 99],
+    ["jointTable", 1, 1],
+    ["jointTable", 7, 0],
+    ["jointTable", 8, 0],
+    ["skinTable", 0, 9],
+    ["skinTable", 1, 1],
+    ["skinTable", 2, 0],
+    ["clusterTable", 0, 9],
+    ["clusterTable", 1, -1],
+    ["clusterTable", 2, 100],
+    ["clusterTable", 3, 0],
+    ["influenceTable", 0, 1],
+    ["influenceTable", 8, 0],
+    ["influenceTable", 8, -1],
+    ["influenceTable", 9, 1],
+  ] as const)("rejects forged%s[%i]", async (key, i, value) => {
+    const v = skinnedMessage();
+    v[key][i] = value;
+    await expect(convert(v)).rejects.toMatchObject({ code: "worker-failed" });
   });
 });

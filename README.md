@@ -6,9 +6,9 @@ This repository is the dedicated package boundary defined by ADR 0094.
 
 ## Supported import profile
 
-`createFbxImporter` imports the `plasius.fbx-static-scene/2` profile: FBX 7400
+`createFbxImporter` imports the `plasius.fbx-linear-skin/3` profile: FBX 7400
 ASCII or binary (including compressed arrays), static mesh instances and source
-hierarchies. Polygons of 3–64 corners are triangulated by pinned ufbx, with
+hierarchies, bones and linear skin clusters. Polygons of 3–64 corners are triangulated by pinned ufbx, with
 per-corner normals/UV0 and per-face material groups preserved. The profile allows
 64 source nodes, 32 materials, 128 material groups and 10,000 triangles across all
 instances. Positions use Float32 resources; matrices retain double precision.
@@ -32,12 +32,38 @@ for the diffuse preview approximation; inspect `document.diagnostics` and
 shading-model name are retained; arbitrary custom shader graphs are not preserved.
 Consent never admits unsupported scene elements or resource acquisition.
 
-Textures, additional UV sets, vertex colours/tangents, user properties, skins,
+Textures, additional UV sets, vertex colours/tangents, user properties,
 morphs, animation, cameras, lights and other element kinds still fail with
 `unsupported-profile`. Unattached meshes and unsupported scenes never become
-empty models. Texture/rig/animation/export/repair work remains in tasks25–30;
+empty models. Texture/morph/animation/export/repair work remains in tasks26–30;
 this package does not yet implement general DCC interchange or an exporter.
 The legacy `packageName`/`packageBootstrap` metadata remains compatible.
+
+Linear skins retain deterministic source-scoped bone identity, hierarchy,
+per-instance palettes, and independent inverse bind matrices when meshes share
+bones. Cluster mesh-node-to-bone, geometry-to-bone and link-to-world matrices,
+plus explicit bind poses, remain in metadata. Geometry transforms are baked into
+attributes once, so canonical skin matrices use the mesh-node-to-bone convention.
+The published renderer bridge exposes the palette and verified JOINTS/WEIGHTS
+accessors; hosts own pose evaluation (`jointWorld * inverseBind * position`).
+It does not evaluate FBX animation takes, which remain task27.
+
+The profile admits at most64 joints,64 mesh-instance skins,128 cluster bindings,
+8 bind poses/512 pose entries and8 influences per control point. Corner expansion
+preserves weights through triangulation/material seams. Weights must be finite,
+non-negative, in[0,1] and sum to1 within1e-6; zero entries are permitted but
+zero-total vertices fail with `invalid-skin-weights`. No truncation, normalization
+repair or invented fallback joint occurs. JOINTS/WEIGHTS use4 or8 padded slots.
+`unsupported-skinning` explicitly denies rigid/dual-quaternion/blended methods,
+additive/TotalOne cluster modes, stacked deformers, duplicate-bone palettes and
+joint-local shear that cannot be preserved as canonical rest TRS. Capacity
+violations return `limit-exceeded`. No loss consent overrides these denials.
+
+See [ADR0009](docs/adrs/adr-0009-linear-skin-bindings.md) and
+[the skin qualification](docs/design/fbx-skin-qualification.md) for conventions,
+limits and test evidence. Static profile2 inputs remain supported; the exported
+profile literal and private worker protocol advance to3, requiring matching
+package worker assets and recompilation of literal-typed profile consumers.
 
 ```ts
 import { createFbxImporter } from "@plasius/gpu-model-fbx";
@@ -74,8 +100,8 @@ File-provider injections must enforce the supplied byte ceiling while reading.
 50,000 allocation attempts and a 10-second whole-operation deadline. Optional
 `limits` can only tighten these values. The parser has a fixed 64 MiB Wasm memory,
 1 MiB stack and 64-node depth ceiling. Each attribute buffer is at most
-360,000 bytes; positions/normals/UV0 total at most 960,000 verified bytes.
-Native node/material/primitive/name tables have fixed capacities.
+480,000 bytes; all verified attribute buffers total at most 2,160,000 bytes.
+Native node/material/primitive/name and skeletal tables have fixed capacities.
 Each importer admits one operation at a time, creates one fresh worker, and
 terminates it on success, failure, abort, timeout or disposal. It retains no model
 cache. Returned model payloads belong to the caller; no engine GC timing claim

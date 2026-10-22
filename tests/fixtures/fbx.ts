@@ -48,6 +48,7 @@ function scalar(type: string, value: number | string): Buffer {
 export function binary(
   options: {
     compressed?: boolean;
+    skin?: boolean;
     declaredVertices?: number;
     expandedVertices?: boolean;
     quad?: boolean;
@@ -310,6 +311,87 @@ export function binary(
       ],
     },
   ];
+  if (options.skin) {
+    const D = (v: number) => {
+      const b = Buffer.alloc(9);
+      b.write("D");
+      b.writeDoubleLE(v, 1);
+      return b;
+    };
+    const objects = nodes.find((n) => n.name === "Objects")!.children!,
+      connections = nodes.find((n) => n.name === "Connections")!.children!;
+    for (const [id, name, y] of [
+      [10, "Root", 0],
+      [11, "Tip", 1],
+    ] as const)
+      objects.push({
+        name: "Model",
+        props: [L(id), S(`${name}\0\x01Model`), S("LimbNode")],
+        children: [
+          { name: "Version", props: [I(232)] },
+          {
+            name: "Properties70",
+            children: [
+              {
+                name: "P",
+                props: [
+                  S("Lcl Translation"),
+                  S("Lcl Translation"),
+                  S(""),
+                  S("A"),
+                  D(0),
+                  D(y),
+                  D(0),
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    objects.push({
+      name: "Deformer",
+      props: [L(20), S("Skin\0\x01Deformer"), S("Skin")],
+      children: [
+        { name: "Version", props: [I(101)] },
+        { name: "SkinningType", props: [S("Linear")] },
+      ],
+    });
+    for (const [id, name, weights, y] of [
+      [21, "Root", [1, 0.5, 0], 0],
+      [22, "Tip", [0, 0.5, 1], 1],
+    ] as const)
+      objects.push({
+        name: "Deformer",
+        props: [L(id), S(`${name}\0\x01SubDeformer`), S("Cluster")],
+        children: [
+          { name: "Version", props: [I(100)] },
+          { name: "Indexes", props: [array("i", [0, 1, 2])] },
+          { name: "Weights", props: [array("d", [...weights])] },
+          {
+            name: "Transform",
+            props: [
+              array("d", [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -y, 0, 1]),
+            ],
+          },
+          {
+            name: "TransformLink",
+            props: [
+              array("d", [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, y, 0, 1]),
+            ],
+          },
+        ],
+      });
+    for (const [a, b] of [
+      [10, 0],
+      [11, 10],
+      [20, 1],
+      [21, 20],
+      [22, 20],
+      [10, 21],
+      [11, 22],
+    ])
+      connections.push({ name: "C", props: [S("OO"), L(a!), L(b!)] });
+  }
   function encode(node: Node, offset: number): Buffer {
     const name = Buffer.from(node.name);
     const props = Buffer.concat(node.props ?? []);

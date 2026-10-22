@@ -8,3 +8,4 @@
 - [ADR-0006: FBX Dependency and Licensing Strategy](./adr-0006-fbx-dependency-and-licensing-strategy.md)
 - [ADR-0007: Bounded Browser FBX Import](./adr-0007-bounded-browser-fbx-import.md)
 - [ADR-0008: Static FBX Scene Fidelity](./adr-0008-static-scene-fidelity.md)
+- [ADR-0009: Linear FBX Skin Bindings](./adr-0009-linear-skin-bindings.md)
