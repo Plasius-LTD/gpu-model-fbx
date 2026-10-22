@@ -10,13 +10,13 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Preserve FBX takes, ordered layers, source timing/curve evidence and bounded sampled bone/morph poses, with independent explicit animation-loss consent.
 
 - **Changed**
-  - (placeholder)
+  - Advance the declared import profile/private worker protocol to animation/5; adopt public core0.7.0 and renderer0.5.0 for canonical empty clips and matching private verification identity.
 
 - **Fixed**
-  - (placeholder)
+  - Include a blocking canonical diagnostic ledger when rejecting unsupported animation constraints, regardless of loss consent.
 
 - **Security**
   - (placeholder)

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { build } from "esbuild";
 import { chromium } from "playwright-core";
 import { ascii, binary } from "../tests/fixtures/fbx.ts";
+import { animationFixture } from "../tests/fixtures/animation.ts";
 import { morphFixture } from "../tests/fixtures/morph.ts";
 import { skinFixture } from "../tests/fixtures/skin.ts";
 import { sceneFixture } from "../tests/fixtures/scene.ts";
@@ -29,6 +30,16 @@ await build({
   outdir: cache,
 });
 const fixtures = JSON.stringify({
+  animation: [...animationFixture({ skin: true, morph: true })],
+  animationBinary: [...binary({ animation: true, skin: true, morph: true })],
+  animationCompressed: [
+    ...binary({ animation: true, skin: true, morph: true, compressed: true }),
+  ],
+  animationCentimetres: [
+    ...animationFixture({ skin: true, morph: true, centimetres: true }),
+  ],
+  animationZup: [...animationFixture({ skin: true, morph: true, zUp: true })],
+  animationEmpty: [...animationFixture({ empty: true, takes: 2 })],
   morph: [...morphFixture()],
   morphNegative: [...morphFixture({ weight: -25 })],
   morphCentimetres: [...morphFixture({ centimetres: true })],

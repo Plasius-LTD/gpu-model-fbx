@@ -1,4 +1,4 @@
-/** Non-raiseable budgets for the bounded static FBX import profile. */
+/** Non-raiseable budgets for the bounded FBX scene/animation import profile. */
 export const FBX_IMPORT_LIMITS = Object.freeze({
   maxBytes: 8 * 1024 * 1024,
   parserBytes: 24 * 1024 * 1024,
@@ -6,7 +6,7 @@ export const FBX_IMPORT_LIMITS = Object.freeze({
   timeoutMs: 10_000,
 });
 export const FBX_IMPORT_FEATURE_FLAG = "gpu.model.conversion.enabled" as const;
-export const FBX_IMPORT_PROFILE = "plasius.fbx-morph/4" as const;
+export const FBX_IMPORT_PROFILE = "plasius.fbx-animation/5" as const;
 export type FbxImportLimits = {
   readonly [K in keyof typeof FBX_IMPORT_LIMITS]: number;
 };
@@ -24,7 +24,8 @@ export type FbxImportErrorCode =
   | "unsupported-skinning"
   | "invalid-skin-weights"
   | "unsupported-morph"
-  | "invalid-morph";
+  | "invalid-morph"
+  | "unsupported-animation";
 /** Bounded codes deliberately exclude source content and upstream error text. */
 export class FbxImportError extends Error {
   public constructor(
@@ -37,7 +38,21 @@ export class FbxImportError extends Error {
 }
 /** Private, bounded worker protocol. It carries no canonical verification brand. */
 export interface ParsedFbx {
-  readonly protocol: 4;
+  readonly protocol: 5;
+  readonly animationStacks: Float64Array;
+  readonly animationLayers: Float64Array;
+  readonly animationCurves: Float64Array;
+  readonly animationKeys: Float64Array;
+  readonly animationTimes: Float64Array;
+  readonly animationTransforms: Float64Array;
+  readonly animationWeights: Float64Array;
+  readonly animationStackNames: readonly string[];
+  readonly animationLayerNames: readonly string[];
+  readonly animationCurveNames: readonly string[];
+  readonly animationValueNames: readonly string[];
+  readonly framesPerSecond: number;
+  readonly timeMode: number;
+  readonly ktimeSecond: number;
   readonly morphTable: Float64Array;
   readonly morphIndices: Float64Array;
   readonly morphPositions: Float32Array;

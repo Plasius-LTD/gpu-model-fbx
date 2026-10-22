@@ -6,9 +6,9 @@ This repository is the dedicated package boundary defined by ADR 0094.
 
 ## Supported import profile
 
-`createFbxImporter` imports the `plasius.fbx-morph/4` profile: FBX 7400
+`createFbxImporter` imports the `plasius.fbx-animation/5` profile: FBX 7400
 ASCII or binary (including compressed arrays), static mesh instances and source
-hierarchies, bones, linear skin clusters and sparse morph channels/targets. Polygons of 3–64 corners are triangulated by pinned ufbx, with
+hierarchies, bones, linear skin clusters, sparse morph channels/targets and bounded animation takes. Polygons of 3–64 corners are triangulated by pinned ufbx, with
 per-corner normals/UV0 and per-face material groups preserved. The profile allows
 64 source nodes, 32 materials, 128 material groups and 10,000 triangles across all
 instances. Positions use Float32 resources; matrices retain double precision.
@@ -33,9 +33,9 @@ shading-model name are retained; arbitrary custom shader graphs are not preserve
 Consent never admits unsupported scene elements or resource acquisition.
 
 Textures, additional UV sets, vertex colours/tangents, user properties,
-animation, cameras, lights and other element kinds still fail with
+cameras, lights and other element kinds still fail with
 `unsupported-profile`. Unattached meshes and unsupported scenes never become
-empty models. Texture/animation/export/repair work remains in tasks27–30;
+empty models. Texture/export/repair work remains in tasks28–30;
 this package does not yet implement general DCC interchange or an exporter.
 The legacy `packageName`/`packageBootstrap` metadata remains compatible.
 
@@ -46,7 +46,7 @@ plus explicit bind poses, remain in metadata. Geometry transforms are baked into
 attributes once, so canonical skin matrices use the mesh-node-to-bone convention.
 The published renderer bridge exposes the palette and verified JOINTS/WEIGHTS
 accessors; hosts own pose evaluation (`jointWorld * inverseBind * position`).
-It does not evaluate FBX animation takes, which remain task27.
+The bridge exposes animation samplers; the host applies the sampled pose before skinning.
 
 The profile admits at most64 joints,64 mesh-instance skins,128 cluster bindings,
 8 bind poses/512 pose entries and8 influences per control point. Corner expansion
@@ -62,7 +62,7 @@ violations return `limit-exceeded`. No loss consent overrides these denials.
 See [ADR0009](docs/adrs/adr-0009-linear-skin-bindings.md) and
 [the skin qualification](docs/design/fbx-skin-qualification.md) for conventions,
 limits and test evidence. Static profile2 inputs remain supported; the exported
-profile literal and private worker protocol advance to4, requiring matching
+profile literal and private worker protocol advance to5, requiring matching
 package worker assets and recompilation of literal-typed profile consumers.
 
 Morphs retain sparse source control-point membership in verified u32 accessors,
@@ -83,8 +83,33 @@ weighted-offset extensions, orphan elements and nonpositive/duplicate thresholds
 fail with `unsupported-morph`; invalid sparse data fails with `invalid-morph` or
 `invalid-fbx`. Normal offsets require base normals. No consent bakes or drops
 unsupported targets. See [ADR0010](docs/adrs/adr-0010-morph-channels.md) and
-[the morph qualification](docs/design/fbx-morph-qualification.md). FBX take/layer
-animation remains task27; this profile preserves authored morph defaults.
+[the morph qualification](docs/design/fbx-morph-qualification.md). Authored morph defaults remain separate from sampled take weights.
+
+Animation takes retain names, ordered layers, static weights/blend modes, local
+and reference spans, original start/end, KTime seconds and clip frame rate. Empty
+takes have no samplers, channels or invented motion. Nonempty takes evaluate node
+TRS/pivots and independent bone/morph channels on a source-rate grid, including
+both endpoints, then expose zero-based canonical linear samplers. Root samples
+receive the same floor-centre offset as rest transforms. Quaternions retain unit
+length and a continuous hemisphere; morph coefficients use canonical target order.
+
+Sampling and layer baking require separate `{ allowAnimationLoss: true }` consent.
+Material consent does not authorize animation approximation. Inspect
+`document.metadata.animationDiagnosticReport` and `fbx-animation-sampled` diagnostics.
+The original interpreted key times/values/interpolation/tangents/extrapolation and
+layer identities remain source evidence; samples do not claim exact curves,
+between-grid fidelity, layer editability or FBX DOM roundtrip. Source key evidence
+is a verified little-endian Float64 resource described in
+[ADR0011](docs/adrs/adr-0011-animation-takes-and-sampling.md).
+
+The animation profile permits 8 takes, 32 layer occurrences, 128 component curve
+rows, 4096 source key occurrences, 256 total sampled frames and 121 frames per
+take; rates are finite in (0,120]. Reused layers/curves count per occurrence.
+Canonical metadata additionally has its published 4096-value aggregate budget;
+combined scenes exceeding it fail `limit-exceeded`. Unsupported animated properties,
+constraints, animated layer weights, mute/solo, changing geometric transforms,
+singular scale and local shear fail closed with `unsupported-animation`.
+No consent discards those semantics. See [the animation qualification](docs/design/fbx-animation-qualification.md).
 
 ```ts
 import { createFbxImporter } from "@plasius/gpu-model-fbx";
@@ -114,14 +139,14 @@ allocated at import/constructor time or while the remote gate denies access.
 The API accepts canonical `ModelSource` descriptors and optional caller signal
 and integrity evidence. Runtime acquisition is reused from the published
 `@plasius/gpu-model-runtime@0.3.2`; canonical validation is owned by
-`@plasius/gpu-model-core@0.6.0`. There are no workspace/local package references.
+`@plasius/gpu-model-core@0.7.0`. There are no workspace/local package references.
 File-provider injections must enforce the supplied byte ceiling while reading.
 
 `FBX_IMPORT_LIMITS` fixes 8 MiB input, 24 MiB aggregate parser allocations,
 50,000 allocation attempts and a 10-second whole-operation deadline. Optional
 `limits` can only tighten these values. The parser has a fixed 64 MiB Wasm memory,
 1 MiB stack and 64-node depth ceiling. Each attribute buffer is at most
-480,000 bytes; all verified attribute buffers total at most 5,520,000 bytes.
+480,000 bytes; all verified resources total at most 6,600,000 bytes (derived maximum 6,536,832).
 Native node/material/primitive/name skeletal and morph tables have fixed capacities.
 Each importer admits one operation at a time, creates one fresh worker, and
 terminates it on success, failure, abort, timeout or disposal. It retains no model
@@ -209,3 +234,7 @@ the prepared SHA is the exact `main` head after successful push-triggered CI.
 The completed `0.1.0` bootstrap path has been removed; subsequent releases must
 use npm trusted publishing.
 <!-- END PLASIUS RELEASE INTEGRITY -->
+
+Unsupported animation rejection includes a canonical strict diagnostic report
+(`fbx-animation-unsupported`) without source text. This blocking record remains
+rejected with loss consent: unsupported constraints are never silently baked.

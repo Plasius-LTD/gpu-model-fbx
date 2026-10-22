@@ -21,7 +21,7 @@ void fbx_test_continue(int value) { native_continue = value; }
 #define PRIMITIVE_STRIDE 6
 #define MATERIAL_STRIDE 126
 static float positions[90000], normals[90000], uvs[60000];
-static double header[18], nodes[64*NODE_STRIDE], primitives[128*PRIMITIVE_STRIDE], materials[32*MATERIAL_STRIDE];
+static double header[28], nodes[64*NODE_STRIDE], primitives[128*PRIMITIVE_STRIDE], materials[32*MATERIAL_STRIDE];
 static char node_names[64][513], mesh_names[64][513], material_names[32][513], material_shaders[32][129];
 static double joint_table[64*11], skin_table[64*3], cluster_table[128*39], influence_table[30000*16];
 static double pose_table[512*14];
@@ -34,6 +34,23 @@ static char morph_names[128][513], channel_names[128][513];
 static unsigned morph_count, morph_corners, morph_refs;
 static int joint_map[64];
 static unsigned joint_count, skin_count, cluster_count;
+/* Animation capacities are independent of input size and cannot be raised. */
+static double animation_stacks[8*12], animation_layers[32*10], animation_curves[128*16];
+static double animation_keys[4096*7], animation_times[256];
+static double animation_transforms[256*64*10], animation_weights[256*128];
+static char animation_stack_names[8][513], animation_layer_names[32][513];
+static char animation_curve_names[128][513], animation_value_names[128][513];
+double *fbx_animation_stacks(void) { return animation_stacks; }
+double *fbx_animation_layers(void) { return animation_layers; }
+double *fbx_animation_curves(void) { return animation_curves; }
+double *fbx_animation_keys(void) { return animation_keys; }
+double *fbx_animation_times(void) { return animation_times; }
+double *fbx_animation_transforms(void) { return animation_transforms; }
+double *fbx_animation_weights(void) { return animation_weights; }
+char *fbx_animation_stack_names(void) { return animation_stack_names[0]; }
+char *fbx_animation_layer_names(void) { return animation_layer_names[0]; }
+char *fbx_animation_curve_names(void) { return animation_curve_names[0]; }
+char *fbx_animation_value_names(void) { return animation_value_names[0]; }
 static size_t live_bytes, attempts, memory_ceiling, allocation_ceiling;
 static int budget_failed;
 static const char *transform_props[] = { "Lcl Translation", "Lcl Rotation", "Lcl Scaling", "PreRotation", "PostRotation", "RotationOffset", "RotationPivot", "ScalingOffset", "ScalingPivot", "GeometricTranslation", "GeometricRotation", "GeometricScaling" };
@@ -88,6 +105,117 @@ static int node_index(ufbx_scene *scene, ufbx_node *node) {
   for (size_t i=1;i<scene->nodes.count;i++) if (scene->nodes.data[i]==node) return (int)i-1;
   return -2;
 }
+static int copy_name(char *out, ufbx_string name) {
+  if (name.length>512 || memchr(name.data,0,name.length)) return 0;
+  memcpy(out,name.data,name.length);out[name.length]=0;return 1;
+}
+/* Source evidence is interpreted ufbx data, not a claim to roundtrip the FBX DOM. */
+static int parse_animation(ufbx_scene *scene) {
+  unsigned layers=0, curves=0, keys=0, frames=0;
+  if(scene->anim_stacks.count>8 || scene->anim_layers.count>32 || scene->anim_values.count>128 || scene->anim_curves.count>128) return 3;
+  if(!scene->anim_stacks.count) return scene->anim_layers.count || scene->anim_values.count || scene->anim_curves.count ? 10 : 0;
+  double fps=scene->settings.frames_per_second;
+  if(!isfinite(fps) || fps<=0 || fps>120 || scene->metadata.ktime_second!=46186158000) return 10;
+  unsigned char seen_layer[32]={0},seen_value[128]={0},seen_curve[128]={0};
+  for(size_t si=0;si<scene->anim_stacks.count;si++) {
+    ufbx_anim_stack *stack=scene->anim_stacks.data[si];double *s=&animation_stacks[si*12];memset(s,0,12*sizeof(double));
+    if(!copy_name(animation_stack_names[si],stack->name)) return 10;
+    if(!isfinite(stack->time_begin) || !isfinite(stack->time_end) || fabs(stack->time_begin)>1000000 || fabs(stack->time_end)>1000000 || stack->time_end<stack->time_begin) return 10;
+    s[0]=stack->time_begin;s[1]=stack->time_end;s[7]=layers;s[8]=stack->layers.count;s[9]=frames;
+    const char *spans[]={"LocalStart","LocalStop","ReferenceStart","ReferenceStop"};
+    for(unsigned i=0;i<4;i++) { ufbx_prop *p=ufbx_find_prop(&stack->props,spans[i]);if(p){s[2+i]=(double)p->value_int/(double)scene->metadata.ktime_second;s[6]+=(1u<<i);if(!isfinite(s[2+i]) || fabs(s[2+i])>1000000)return 10;} }
+    if(layers+stack->layers.count>32) return 3;
+    unsigned props=0;
+    for(size_t li=0;li<stack->layers.count;li++) {
+      ufbx_anim_layer *layer=stack->layers.data[li];
+      if(layer->typed_id>=32 || !copy_name(animation_layer_names[layers],layer->name)) return 10;
+      seen_layer[layer->typed_id]=1;
+      if(!isfinite(layer->weight) || fabs(layer->weight)>1000000 || layer->weight_is_animated) return 10;
+      /* Muted/solo layer semantics are not implemented by this profile. */
+      if(ufbx_find_int(&layer->props,"Mute",0) || ufbx_find_int(&layer->props,"Solo",0))return 10;
+      double *l=&animation_layers[layers*10];
+      l[0]=si;l[1]=layer->typed_id;l[2]=layer->weight;l[3]=layer->blended;l[4]=layer->additive;l[5]=layer->compose_rotation;l[6]=layer->compose_scale;l[7]=layer->weight_is_animated;l[8]=curves;l[9]=0;
+      for(size_t pi=0;pi<layer->anim_props.count;pi++) {
+        ufbx_anim_prop prop=layer->anim_props.data[pi];int kind=-1,target=-1,property=-1;
+        if(prop.element->type==UFBX_ELEMENT_NODE) {
+          kind=0;target=node_index(scene,(ufbx_node*)prop.element);
+          for(unsigned i=0;i<9;i++)if(prop.prop_name.length==strlen(transform_props[i]) && !memcmp(prop.prop_name.data,transform_props[i],prop.prop_name.length))property=(int)i;
+        } else if(prop.element->type==UFBX_ELEMENT_BLEND_CHANNEL && prop.prop_name.length==13 && !memcmp(prop.prop_name.data,"DeformPercent",13)) {
+          kind=1;target=(int)prop.element->typed_id;property=0;
+        }
+        if(kind<0 || target<0 || property<0 || prop.anim_value->typed_id>=128) return 10;
+        seen_value[prop.anim_value->typed_id]=1;props++;
+        for(unsigned axis=0;axis<3;axis++) {
+          ufbx_anim_curve *curve=prop.anim_value->curves[axis];
+          if(curves>=128)return 3;
+          double *c=&animation_curves[curves*16];memset(c,0,16*sizeof(double));
+          c[0]=layers;c[1]=kind;c[2]=target;c[3]=property;c[4]=axis;c[5]=prop.anim_value->typed_id;c[6]=curve ? (double)curve->typed_id : -1;c[7]=keys;c[8]=curve ? curve->keyframes.count : 0;
+          for(unsigned k=0;k<3;k++)c[9+k]=prop.anim_value->default_value.v[k];
+          if(!copy_name(animation_value_names[curves],prop.anim_value->name))return 10;
+          animation_curve_names[curves][0]=0;
+          if(curve) {
+            if(curve->typed_id>=128 || keys+curve->keyframes.count>4096)return 3;
+            seen_curve[curve->typed_id]=1;
+            if(!copy_name(animation_curve_names[curves],curve->name))return 10;
+            c[12]=curve->pre_extrapolation.mode;c[13]=curve->pre_extrapolation.repeat_count;c[14]=curve->post_extrapolation.mode;c[15]=curve->post_extrapolation.repeat_count;
+            double previous=-INFINITY;
+            for(size_t ki=0;ki<curve->keyframes.count;ki++) {
+              ufbx_keyframe key=curve->keyframes.data[ki];double *k=&animation_keys[keys++*7];
+              if(!isfinite(key.time) || key.time<=previous || fabs(key.time)>1000000 || !isfinite(key.value) || fabs(key.value)>1000000 || key.interpolation>UFBX_INTERPOLATION_CUBIC)return 10;
+              previous=key.time;k[0]=key.time;k[1]=key.value;k[2]=key.interpolation;k[3]=key.left.dx;k[4]=key.left.dy;k[5]=key.right.dx;k[6]=key.right.dy;
+              for(unsigned j=3;j<7;j++)if(!isfinite(k[j]) || fabs(k[j])>1000000)return 10;
+            }
+          }
+          curves++;l[9]++;
+        }
+      }
+      layers++;
+    }
+    s[11]=props!=0;
+    if(!props)continue;
+    double intervals=ceil((stack->time_end-stack->time_begin)*fps-1e-9);
+    if(intervals>120 || frames+(unsigned)intervals+1>256)return 3;
+    unsigned count=(unsigned)intervals+1;s[10]=count;
+    for(unsigned fi=0;fi<count;fi++) {
+      if(!deadline_ok())return 4;
+      double time=fi+1==count ? stack->time_end : stack->time_begin+(double)fi/fps;
+      animation_times[frames]=time;
+      ufbx_evaluate_opts opts={0};ufbx_error error;
+      opts.temp_allocator.allocator.realloc_fn=bounded_realloc;opts.result_allocator.allocator.realloc_fn=bounded_realloc;
+      opts.temp_allocator.memory_limit=opts.result_allocator.memory_limit=memory_ceiling;
+      opts.temp_allocator.allocation_limit=opts.result_allocator.allocation_limit=allocation_ceiling;
+      ufbx_scene *posed=ufbx_evaluate_scene(scene,stack->anim,time,&opts,&error);
+      if(!posed)return budget_failed ? 3 : 10;
+      int result=0;
+      for(size_t ni=1;ni<posed->nodes.count;ni++) {
+        ufbx_node *node=posed->nodes.data[ni];ufbx_matrix local=node->node_to_world;
+        if(node->parent!=posed->root_node) {
+          if(fabs(determinant(node->parent->node_to_world))<1e-12){result=10;break;}
+          ufbx_matrix inverse=ufbx_matrix_invert(&node->parent->node_to_world);local=ufbx_matrix_mul(&inverse,&local);
+        }
+        ufbx_transform trs=ufbx_matrix_to_transform(&local);ufbx_matrix check=ufbx_transform_to_matrix(&trs);
+        for(unsigned k=0;k<12;k++)if(!isfinite(local.v[k]) || fabs(local.v[k])>1000000 || fabs(check.v[k]-local.v[k])>1e-8*fmax(1,fabs(local.v[k])))result=10;
+        for(unsigned k=0;k<12;k++)if(fabs(node->geometry_to_node.v[k]-scene->nodes.data[ni]->geometry_to_node.v[k])>1e-8)result=10;
+        double *out=&animation_transforms[(frames*(scene->nodes.count-1)+ni-1)*10];
+        for(unsigned k=0;k<3;k++){out[k]=trs.translation.v[k];out[7+k]=trs.scale.v[k];if(fabs(trs.scale.v[k])<1e-12)result=10;}
+        for(unsigned k=0;k<4;k++)out[3+k]=trs.rotation.v[k];
+      }
+      for(unsigned mi=0;mi<morph_count;mi++) {
+        unsigned channel=(unsigned)morph_table[mi*MORPH_STRIDE+3],key=(unsigned)morph_table[mi*MORPH_STRIDE+12];
+        double weight=posed->blend_channels.data[channel]->keyframes.data[key].effective_weight;
+        if(!isfinite(weight) || fabs(weight)>1000000)result=10;
+        animation_weights[frames*morph_count+mi]=weight;
+      }
+      ufbx_free_scene(posed);if(result)return result;frames++;
+    }
+  }
+  for(size_t i=0;i<scene->anim_layers.count;i++)if(!seen_layer[i])return 10;
+  for(size_t i=0;i<scene->anim_values.count;i++)if(!seen_value[i])return 10;
+  for(size_t i=0;i<scene->anim_curves.count;i++)if(!seen_curve[i])return 10;
+  header[18]=scene->anim_stacks.count;header[19]=layers;header[20]=curves;header[21]=keys;header[22]=frames;
+  header[23]=frames*(scene->nodes.count-1);header[24]=frames*morph_count;header[25]=fps;header[26]=scene->settings.time_mode;header[27]=(double)scene->metadata.ktime_second;
+  return 0;
+}
 /* Safe finite codes; no upstream exception strings, source text or resource paths. */
 int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigned allocation_limit) {
   memset(header,0,sizeof(header)); joint_count=skin_count=cluster_count=morph_count=morph_corners=morph_refs=0;
@@ -136,7 +264,7 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
   }
   for (size_t i=0;i<scene->elements.count;i++) {
     ufbx_element *element=scene->elements.data[i];
-    if (element->type!=UFBX_ELEMENT_NODE && element->type!=UFBX_ELEMENT_MESH && element->type!=UFBX_ELEMENT_MATERIAL && element->type!=UFBX_ELEMENT_BONE && element->type!=UFBX_ELEMENT_SKIN_DEFORMER && element->type!=UFBX_ELEMENT_SKIN_CLUSTER && element->type!=UFBX_ELEMENT_POSE && element->type!=UFBX_ELEMENT_BLEND_DEFORMER && element->type!=UFBX_ELEMENT_BLEND_CHANNEL && element->type!=UFBX_ELEMENT_BLEND_SHAPE) goto done;
+    if (element->type!=UFBX_ELEMENT_NODE && element->type!=UFBX_ELEMENT_MESH && element->type!=UFBX_ELEMENT_MATERIAL && element->type!=UFBX_ELEMENT_BONE && element->type!=UFBX_ELEMENT_SKIN_DEFORMER && element->type!=UFBX_ELEMENT_SKIN_CLUSTER && element->type!=UFBX_ELEMENT_POSE && element->type!=UFBX_ELEMENT_BLEND_DEFORMER && element->type!=UFBX_ELEMENT_BLEND_CHANNEL && element->type!=UFBX_ELEMENT_BLEND_SHAPE && element->type!=UFBX_ELEMENT_ANIM_STACK && element->type!=UFBX_ELEMENT_ANIM_LAYER && element->type!=UFBX_ELEMENT_ANIM_VALUE && element->type!=UFBX_ELEMENT_ANIM_CURVE) { if(scene->anim_stacks.count)result=10;goto done; }
     for (size_t j=0;j<element->props.props.count;j++) if (element->props.props.data[j].flags & UFBX_PROP_FLAG_USER_DEFINED) goto done;
   }
   if (scene->poses.count>8) { result=3; goto done; }
@@ -343,6 +471,7 @@ int fbx_parse(const void *bytes, unsigned length, unsigned memory_limit, unsigne
     }
   }
   if (!cursor) goto done;
+  result=parse_animation(scene);if(result)goto done;
   header[0]=cursor/3; header[1]=scene->metadata.version; header[2]=scene->metadata.ascii; header[3]=scene->settings.unit_meters;
   header[4]=scene->settings.axes.right; header[5]=scene->settings.axes.up; header[6]=scene->settings.axes.front;
   header[7]=scene->nodes.count-1; header[8]=primitive_count; header[9]=scene->materials.count; header[15]=morph_count;header[16]=morph_corners;header[17]=morph_refs;header[10]=joint_count; header[11]=skin_count; header[12]=cluster_count; result=0;

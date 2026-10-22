@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import assert from "node:assert/strict";
+import { animationFixture } from "../tests/fixtures/animation.ts";
 import { morphFixture } from "../tests/fixtures/morph.ts";
 import { skinFixture } from "../tests/fixtures/skin.ts";
 import { sceneFixture } from "../tests/fixtures/scene.ts";
@@ -60,7 +61,7 @@ run(emcc, [
   "-sSTACK_SIZE=1048576",
   "-sFILESYSTEM=1",
   "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPF32,HEAPF64",
-  "-sEXPORTED_FUNCTIONS=_malloc,_free,_fbx_parse,_fbx_header,_fbx_output,_fbx_normals,_fbx_uvs,_fbx_nodes,_fbx_primitives,_fbx_materials,_fbx_node_names,_fbx_material_names,_fbx_mesh_names,_fbx_material_shaders,_fbx_poses,_fbx_pose_names,_fbx_joints,_fbx_skins,_fbx_clusters,_fbx_influences,_fbx_morphs,_fbx_morph_indices,_fbx_morph_positions,_fbx_morph_normals,_fbx_morph_names,_fbx_channel_names,_fbx_outstanding,_coverage_size,_coverage_write",
+  "-sEXPORTED_FUNCTIONS=_malloc,_free,_fbx_parse,_fbx_header,_fbx_output,_fbx_normals,_fbx_uvs,_fbx_nodes,_fbx_primitives,_fbx_materials,_fbx_node_names,_fbx_material_names,_fbx_mesh_names,_fbx_material_shaders,_fbx_poses,_fbx_pose_names,_fbx_joints,_fbx_skins,_fbx_clusters,_fbx_influences,_fbx_morphs,_fbx_morph_indices,_fbx_morph_positions,_fbx_morph_normals,_fbx_morph_names,_fbx_channel_names,_fbx_animation_stacks,_fbx_animation_layers,_fbx_animation_curves,_fbx_animation_keys,_fbx_animation_times,_fbx_animation_transforms,_fbx_animation_weights,_fbx_animation_stack_names,_fbx_animation_layer_names,_fbx_animation_curve_names,_fbx_animation_value_names,_fbx_outstanding,_coverage_size,_coverage_write",
   "-o",
   moduleFile,
 ]);
@@ -112,6 +113,38 @@ function parse(
     wasm._free(p);
   }
 }
+for (const o of [
+  {},
+  { empty: true, takes: 8 },
+  { start: 2, rate: 30 },
+  { start: -2, rate: 60 },
+  { rate: 29.97 },
+  { layers: 2 },
+  { skin: true, morph: true },
+  { skin: true, morph: true, inbetween: true },
+  { pivot: 0.25, rotationCurve: true },
+  { centimetres: true, pivot: 0.25, rotationCurve: true },
+  { preRotation: 10, postRotation: 5, pivot: 0.25, rotationCurve: true },
+  { interpolation: 2 },
+  { interpolation: 8 },
+])
+  parse(animationFixture(o), 0);
+for (const o of [{ duration: 20 }, { takes: 9 }, { keyCount: 4097 }])
+  parse(animationFixture(o), 3);
+for (const o of [
+  { constraint: true },
+  { muted: true },
+  { animatedWeight: true },
+  { property: "Visibility" },
+  { property: "GeometricTranslation" },
+  { rate: 121 },
+])
+  parse(animationFixture(o), 10);
+parse(binary({ animation: true, skin: true, morph: true }), 0);
+parse(
+  binary({ animation: true, skin: true, morph: true, compressed: true }),
+  0,
+);
 for (let i = 0; i < 20; i++) {
   parse(ascii, 0);
   parse(binary(), 0);

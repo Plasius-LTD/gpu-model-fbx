@@ -22,6 +22,17 @@ vi.mock("../dist/ufbx.mjs", () => ({
       _malloc: () => state.malloc,
       _free: (ptr: number) => state.freed.push(ptr),
       _fbx_parse: () => state.code,
+      _fbx_animation_stacks: () => 32768,
+      _fbx_animation_layers: () => 32768,
+      _fbx_animation_curves: () => 32768,
+      _fbx_animation_keys: () => 32768,
+      _fbx_animation_times: () => 32768,
+      _fbx_animation_transforms: () => 32768,
+      _fbx_animation_weights: () => 32768,
+      _fbx_animation_stack_names: () => 32768,
+      _fbx_animation_layer_names: () => 32768,
+      _fbx_animation_curve_names: () => 32768,
+      _fbx_animation_value_names: () => 32768,
       _fbx_outstanding: () => state.outstanding,
       _fbx_morphs: () => 32768,
       _fbx_morph_indices: () => 32768,
@@ -125,7 +136,7 @@ describe("worker protocol", () => {
     expect(
       (await run({ ...request(), cancel: new SharedArrayBuffer(4) })).mock
         .calls[0]?.[0].result.protocol,
-    ).toBe(4);
+    ).toBe(5);
   });
   it("denies ambient network and script transports", async () => {
     await run(request());

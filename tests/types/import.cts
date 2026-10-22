@@ -15,9 +15,13 @@ const importer: FbxImporter = createFbxImporter({
 });
 const document: Promise<GpuModelDocument> = importer.load(
   { kind: "uint8-array", bytes: new Uint8Array() },
-  { allowMaterialLoss: true, signal: new AbortController().signal },
+  {
+    allowMaterialLoss: true,
+    allowAnimationLoss: true,
+    signal: new AbortController().signal,
+  },
 );
-const profile: "plasius.fbx-morph/4" = FBX_IMPORT_PROFILE;
+const profile: "plasius.fbx-animation/5" = FBX_IMPORT_PROFILE;
 const report: GpuModelDiagnosticReport | undefined = new FbxImportError(
   "unsupported-profile",
 ).diagnosticReport;
@@ -27,3 +31,9 @@ void document;
 void profile;
 void report;
 importer.dispose();
+
+importer.load(
+  { kind: "blob", blob: new Blob() },
+  // @ts-expect-error Animation sampling consent requires a boolean.
+  { allowAnimationLoss: "yes" },
+);

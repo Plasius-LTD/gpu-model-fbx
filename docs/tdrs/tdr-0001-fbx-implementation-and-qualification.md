@@ -140,3 +140,12 @@ membership remain available; no dependency version change. Resource membership
 uses verified u32 accessors to respect canonical JSON metadata limits. Fixed
 aggregate canonical bytes are5520000; protocol/native capacities remain bounded.
 Task26 does not complete remaining tasks27–30 or Feature1151/coordinator1.
+
+## Task27 animation profile
+
+[ADR0011](../adrs/adr-0011-animation-takes-and-sampling.md) defines animation/5:
+public core0.7.0 and renderer0.5.0, runtime0.3.2 acquisition, empty clips, ordered
+source layers/curve evidence, bounded evaluated samples and independent animation
+loss consent. [Qualification](../design/fbx-animation-qualification.md) covers
+fixed-time poses, limits, worker trust and release. Task29 retains exporter and
+reimport acceptance; no downstream task or parent is completed by this profile.

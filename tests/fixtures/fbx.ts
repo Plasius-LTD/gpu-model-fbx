@@ -48,6 +48,7 @@ function scalar(type: string, value: number | string): Buffer {
 export function binary(
   options: {
     compressed?: boolean;
+    animation?: boolean;
     skin?: boolean;
     morph?: boolean;
     declaredVertices?: number;
@@ -65,12 +66,14 @@ export function binary(
     expanded?: number,
   ): Buffer {
     let bytes = Buffer.alloc(
-      (expanded ?? values.length) * (type === "d" ? 8 : 4),
+      (expanded ?? values.length) * (["d", "l"].includes(type) ? 8 : 4),
     );
     values.forEach((v, i) =>
       type === "d"
         ? bytes.writeDoubleLE(v, i * 8)
-        : bytes.writeInt32LE(v, i * 4),
+        : type === "l"
+          ? bytes.writeBigInt64LE(BigInt(v), i * 8)
+          : bytes.writeInt32LE(v, i * 4),
     );
     if (options.compressed) bytes = deflateSync(bytes);
     const header = Buffer.alloc(13);
@@ -433,6 +436,103 @@ export function binary(
       [401, 400],
     ])
       connections.push({ name: "C", props: [S("OO"), L(a!), L(b!)] });
+  }
+  if (options.animation) {
+    const D = (v: number) => {
+      const b = Buffer.alloc(9);
+      b.write("D");
+      b.writeDoubleLE(v, 1);
+      return b;
+    };
+    const property = (name: string, type: string, values: Buffer[]) => ({
+      name: "P",
+      props: [S(name), S(type), S(""), S("A"), ...values],
+    });
+    nodes
+      .find((n) => n.name === "GlobalSettings")!
+      .children!.find((n) => n.name === "Properties70")!
+      .children!.push(property("TimeMode", "enum", [I(11)]));
+    const objects = nodes.find((n) => n.name === "Objects")!.children!,
+      connections = nodes.find((n) => n.name === "Connections")!.children!;
+    objects.push(
+      {
+        name: "AnimationStack",
+        props: [L(1000), S("Take0\0\x01AnimStack"), S("")],
+        children: [
+          {
+            name: "Properties70",
+            children: [
+              property("LocalStart", "KTime", [L(-46186158000)]),
+              property("LocalStop", "KTime", [L(0)]),
+              property("ReferenceStart", "KTime", [L(92372316000)]),
+              property("ReferenceStop", "KTime", [L(138558474000)]),
+            ],
+          },
+        ],
+      },
+      {
+        name: "AnimationLayer",
+        props: [L(1001), S("Layer0\0\x01AnimLayer"), S("")],
+        children: [
+          {
+            name: "Properties70",
+            children: [
+              property("Weight", "Number", [D(100)]),
+              property("BlendMode", "enum", [I(1)]),
+            ],
+          },
+        ],
+      },
+    );
+    connections.push({ name: "C", props: [S("OO"), L(1001), L(1000)] });
+    for (const [i, target, prop, axis, initial, end] of [
+      [
+        0,
+        options.skin ? 11 : 2,
+        "Lcl Translation",
+        "Y",
+        options.skin ? 1 : 0,
+        options.skin ? 3 : 2,
+      ],
+      ...(options.morph ? [[1, 400, "DeformPercent", "X", 0, 100]] : []),
+    ] as [number, number, string, string, number, number][]) {
+      const v = 1010 + i * 10,
+        c = v + 1;
+      objects.push(
+        {
+          name: "AnimationCurveNode",
+          props: [L(v), S(`Value${i}\0\x01AnimCurveNode`), S("")],
+          children: [
+            {
+              name: "Properties70",
+              children: [
+                property("d|X", "Number", [D(0)]),
+                property("d|Y", "Number", [D(axis === "Y" ? initial : 0)]),
+                property("d|Z", "Number", [D(0)]),
+              ],
+            },
+          ],
+        },
+        {
+          name: "AnimationCurve",
+          props: [L(c), S(`Curve${i}\0\x01AnimCurve`), S("")],
+          children: [
+            { name: "Default", props: [D(0)] },
+            { name: "KeyVer", props: [I(4008)] },
+            { name: "KeyTime", props: [array("l", [-46186158000, 0])] },
+            { name: "KeyValueFloat", props: [array("d", [initial, end])] },
+            { name: "KeyAttrFlags", props: [array("i", [4])] },
+            { name: "KeyAttrDataFloat", props: [array("d", [0, 0, 0, 0])] },
+            { name: "KeyAttrRefCount", props: [array("i", [2])] },
+          ],
+        },
+      );
+      connections.push(
+        { name: "C", props: [S("OO"), L(v), L(1001)] },
+        { name: "C", props: [S("OP"), L(v), L(target), S(prop)] },
+        { name: "C", props: [S("OP"), L(c), L(v), S(`d|${axis}`)] },
+      );
+    }
   }
   function encode(node: Node, offset: number): Buffer {
     const name = Buffer.from(node.name);
