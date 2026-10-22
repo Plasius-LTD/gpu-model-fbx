@@ -16,7 +16,21 @@ function message(): ParsedFbx {
     nodeTable[62] =
       1;
   return {
-    protocol: 4,
+    protocol: 5,
+    animationStacks: new Float64Array(),
+    animationLayers: new Float64Array(),
+    animationCurves: new Float64Array(),
+    animationKeys: new Float64Array(),
+    animationTimes: new Float64Array(),
+    animationTransforms: new Float64Array(),
+    animationWeights: new Float64Array(),
+    animationStackNames: [],
+    animationLayerNames: [],
+    animationCurveNames: [],
+    animationValueNames: [],
+    framesPerSecond: 0,
+    timeMode: 0,
+    ktimeSecond: 0,
     morphTable: new Float64Array(),
     morphIndices: new Float64Array(),
     morphPositions: new Float32Array(),

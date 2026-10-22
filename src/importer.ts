@@ -43,6 +43,8 @@ export interface FbxImporter {
       signal?: AbortSignal;
       integrity?: string;
       allowMaterialLoss?: boolean;
+      /** Consent to sampled curves/layer baking; independent of material preview consent. */
+      allowAnimationLoss?: boolean;
     }>,
   ): Promise<GpuModelDocument>;
   /** Aborts the active operation and permanently denies further work; idempotent. */
@@ -87,8 +89,10 @@ export function createFbxImporter(options: FbxImporterOptions): FbxImporter {
     },
     async load(source, operation = {}) {
       if (
-        typeof operation.allowMaterialLoss !== "undefined" &&
-        typeof operation.allowMaterialLoss !== "boolean"
+        (typeof operation.allowMaterialLoss !== "undefined" &&
+          typeof operation.allowMaterialLoss !== "boolean") ||
+        (operation.allowAnimationLoss !== undefined &&
+          typeof operation.allowAnimationLoss !== "boolean")
       )
         throw new FbxImportError("invalid-input");
       if (disposed) throw new FbxImportError("disposed");
@@ -166,6 +170,7 @@ export function createFbxImporter(options: FbxImporterOptions): FbxImporter {
                           7: "invalid-skin-weights",
                           8: "unsupported-morph",
                           9: "invalid-morph",
+                          10: "unsupported-animation",
                         } as const
                       )[data?.error as 1] ?? "worker-failed",
                     ),
@@ -259,6 +264,7 @@ export function createFbxImporter(options: FbxImporterOptions): FbxImporter {
             result.contentHash,
             signal,
             operation.allowMaterialLoss === true,
+            operation.allowAnimationLoss === true,
           );
         } catch (error) {
           check();

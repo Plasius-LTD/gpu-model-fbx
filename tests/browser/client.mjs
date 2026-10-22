@@ -100,6 +100,8 @@ async function run() {
   checks.push(...(await checkGeometry(importer, fixture, check)));
   const { checkMorphs } = await import("./morph.mjs");
   checks.push(...(await checkMorphs(importer, fixture, check)));
+  const { checkAnimations } = await import("./animation.mjs");
+  checks.push(...(await checkAnimations(importer, fixture, check)));
   const { checkSkins } = await import("./skin.mjs");
   checks.push(...(await checkSkins(importer, fixture, check)));
   await rejects(

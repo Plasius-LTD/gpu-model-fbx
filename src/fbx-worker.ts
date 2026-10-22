@@ -31,6 +31,17 @@ interface WasmModule {
   _fbx_morph_normals(): number;
   _fbx_morph_names(): number;
   _fbx_channel_names(): number;
+  _fbx_animation_stacks(): number;
+  _fbx_animation_layers(): number;
+  _fbx_animation_curves(): number;
+  _fbx_animation_keys(): number;
+  _fbx_animation_times(): number;
+  _fbx_animation_transforms(): number;
+  _fbx_animation_weights(): number;
+  _fbx_animation_stack_names(): number;
+  _fbx_animation_layer_names(): number;
+  _fbx_animation_curve_names(): number;
+  _fbx_animation_value_names(): number;
   _fbx_outstanding(): number;
 }
 const scope = globalThis as unknown as {
@@ -93,7 +104,7 @@ scope.onmessage = async (event: MessageEvent) => {
     if (wasm._fbx_outstanding() !== 0) throw 3;
     const header = wasm.HEAPF64.subarray(
       wasm._fbx_header() / 8,
-      wasm._fbx_header() / 8 + 18,
+      wasm._fbx_header() / 8 + 28,
     );
     for (const [index, min, max] of [
       [0, 3, 30000],
@@ -108,6 +119,13 @@ scope.onmessage = async (event: MessageEvent) => {
       [15, 0, 128],
       [16, 0, 120000],
       [17, 0, 120000],
+      [18, 0, 8],
+      [19, 0, 32],
+      [20, 0, 128],
+      [21, 0, 4096],
+      [22, 0, 256],
+      [23, 0, 16384],
+      [24, 0, 32768],
     ])
       if (
         !Number.isInteger(header[index!]) ||
@@ -187,8 +205,62 @@ scope.onmessage = async (event: MessageEvent) => {
       wasm._fbx_morph_normals() / 4,
       wasm._fbx_morph_normals() / 4 + header[16]! * 3,
     );
+    const animationStacks = wasm.HEAPF64.slice(
+      wasm._fbx_animation_stacks() / 8,
+      wasm._fbx_animation_stacks() / 8 + header[18]! * 12,
+    );
+    const animationLayers = wasm.HEAPF64.slice(
+      wasm._fbx_animation_layers() / 8,
+      wasm._fbx_animation_layers() / 8 + header[19]! * 10,
+    );
+    const animationCurves = wasm.HEAPF64.slice(
+      wasm._fbx_animation_curves() / 8,
+      wasm._fbx_animation_curves() / 8 + header[20]! * 16,
+    );
+    const animationKeys = wasm.HEAPF64.slice(
+      wasm._fbx_animation_keys() / 8,
+      wasm._fbx_animation_keys() / 8 + header[21]! * 7,
+    );
+    const animationTimes = wasm.HEAPF64.slice(
+      wasm._fbx_animation_times() / 8,
+      wasm._fbx_animation_times() / 8 + header[22]! * 1,
+    );
+    const animationTransforms = wasm.HEAPF64.slice(
+      wasm._fbx_animation_transforms() / 8,
+      wasm._fbx_animation_transforms() / 8 + header[23]! * 10,
+    );
+    const animationWeights = wasm.HEAPF64.slice(
+      wasm._fbx_animation_weights() / 8,
+      wasm._fbx_animation_weights() / 8 + header[24]! * 1,
+    );
     const result: ParsedFbx = {
-      protocol: 4,
+      protocol: 5,
+      animationStacks,
+      animationLayers,
+      animationCurves,
+      animationKeys,
+      animationTimes,
+      animationTransforms,
+      animationWeights,
+      animationStackNames: names(
+        wasm._fbx_animation_stack_names(),
+        header[18]!,
+      ),
+      animationLayerNames: names(
+        wasm._fbx_animation_layer_names(),
+        header[19]!,
+      ),
+      animationCurveNames: names(
+        wasm._fbx_animation_curve_names(),
+        header[20]!,
+      ),
+      animationValueNames: names(
+        wasm._fbx_animation_value_names(),
+        header[20]!,
+      ),
+      framesPerSecond: header[25]!,
+      timeMode: header[26]!,
+      ktimeSecond: header[27]!,
       morphTable,
       morphIndices,
       morphPositions,
@@ -217,6 +289,14 @@ scope.onmessage = async (event: MessageEvent) => {
       axes: [header[4]!, header[5]!, header[6]!],
     };
     scope.postMessage({ result }, [
+      animationStacks.buffer,
+      animationLayers.buffer,
+      animationCurves.buffer,
+      animationKeys.buffer,
+      animationTimes.buffer,
+      animationTransforms.buffer,
+      animationWeights.buffer,
+
       morphTable.buffer,
       morphIndices.buffer,
       morphPositions.buffer,
@@ -235,7 +315,7 @@ scope.onmessage = async (event: MessageEvent) => {
     ]);
   } catch (error) {
     scope.postMessage({
-      error: typeof error === "number" && error >= 1 && error <= 9 ? error : 5,
+      error: typeof error === "number" && error >= 1 && error <= 10 ? error : 5,
     });
   } finally {
     if (pointer) wasm!._free(pointer);

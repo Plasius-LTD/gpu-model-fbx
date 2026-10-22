@@ -10,6 +10,7 @@ import {
   type ParsedFbx,
 } from "./policy.js";
 import { loadCore, loadRuntime } from "./modules.js";
+import { snapshotAnimation, prepareAnimations } from "./animation.js";
 
 const transformProperties = [
   "LclTranslation",
@@ -133,12 +134,13 @@ export async function toDocument(
   sourceHash: string,
   signal: AbortSignal,
   allowMaterialLoss = false,
+  allowAnimationLoss = false,
 ): Promise<GpuModelDocument> {
   if (
     !value ||
     Object.keys(value).sort().join() !==
-      "ascii,axes,channelNames,clusterTable,influenceTable,jointTable,materialNames,materialShaders,materialTable,meshNames,morphIndices,morphNames,morphNormals,morphPositions,morphTable,nodeNames,nodeTable,normals,poseNames,poseTable,positions,primitiveTable,protocol,skinTable,unitMetres,uvs,version" ||
-    value.protocol !== 4 ||
+      "animationCurveNames,animationCurves,animationKeys,animationLayerNames,animationLayers,animationStackNames,animationStacks,animationTimes,animationTransforms,animationValueNames,animationWeights,ascii,axes,channelNames,clusterTable,framesPerSecond,influenceTable,jointTable,ktimeSecond,materialNames,materialShaders,materialTable,meshNames,morphIndices,morphNames,morphNormals,morphPositions,morphTable,nodeNames,nodeTable,normals,poseNames,poseTable,positions,primitiveTable,protocol,skinTable,timeMode,unitMetres,uvs,version" ||
+    value.protocol !== 5 ||
     !(value.morphTable instanceof Float64Array) ||
     !integer(value.morphTable.length / 14, 0, 128) ||
     !(value.morphIndices instanceof Float64Array) ||
@@ -192,6 +194,7 @@ export async function toDocument(
     !/^[a-f0-9]{64}$/u.test(sourceHash)
   )
     invalid();
+  const animationSnapshot = snapshotAnimation(value, names);
   const arrays = [
     value.morphTable,
     value.morphIndices,
@@ -214,6 +217,7 @@ export async function toDocument(
   // may change already-admitted values while core/resource verification yields.
   value = {
     ...value,
+    ...animationSnapshot,
     morphTable: value.morphTable.slice(),
     morphIndices: value.morphIndices.slice(),
     morphPositions: value.morphPositions.slice(),
@@ -680,6 +684,15 @@ export async function toDocument(
       },
     };
   });
+  const animation = prepareAnimations(value, offset);
+  const animationReport = core.evaluateGpuModelDiagnostics({
+    standard: "fbx",
+    mode: "strict",
+    allowLoss: allowAnimationLoss,
+    issues: animation.issues,
+  });
+  if (!animationReport.accepted)
+    throw new FbxImportError("unsupported-animation", animationReport);
   const report = core.evaluateGpuModelDiagnostics({
     standard: "fbx",
     mode: "strict",
@@ -797,7 +810,11 @@ export async function toDocument(
           },
         ],
   );
-  for (const { id, data } of [...resourcesToVerify, ...sourceRefs]) {
+  for (const { id, data } of [
+    ...resourcesToVerify,
+    ...sourceRefs,
+    ...animation.resources,
+  ]) {
     if (signal.aborted) throw new FbxImportError("aborted");
     const bytes = data.slice();
     resources.push({
@@ -810,6 +827,7 @@ export async function toDocument(
     });
   }
   const accessors = [
+    ...animation.accessors,
     ...primitiveRows.flatMap((row, index) =>
       resourcesToVerify
         .filter((a) => a.enabled(row))
@@ -1047,7 +1065,7 @@ export async function toDocument(
           : { affectedControlPointsAccessorId: `morph-controlpoints-${i}` }),
       },
     })),
-    animations: [],
+    animations: animation.animations,
     analyticGeometry: [],
     bounds: {
       min: min.map((v, k) => v - offset[k]!),
@@ -1057,10 +1075,10 @@ export async function toDocument(
       sourceFormat: "fbx",
       sourceContentHash: sourceHash,
       converterId: "plasius.gpu-model-fbx",
-      converterVersion: "4",
+      converterVersion: "5",
       metadata: { profile: FBX_IMPORT_PROFILE },
     },
-    diagnostics: report.losses.map((loss) => ({
+    diagnostics: [...report.losses, ...animationReport.losses].map((loss) => ({
       severity: "warning",
       code: loss.code,
       message: loss.message,
@@ -1084,40 +1102,50 @@ export async function toDocument(
       })),
       floorCentreOffsetMetres: offset,
       materialDiagnosticReport: report as unknown as GpuModelMetadata,
+      animationDiagnosticReport: animationReport as unknown as GpuModelMetadata,
     },
   };
-  return core.createAndVerifyGpuModelDocument(
-    document,
-    {
-      async digestSha256(chunks) {
-        const parts: Uint8Array[] = [];
-        let length = 0;
-        for await (const part of chunks) {
-          length += part.byteLength;
-          if (length > 480000) invalid();
-          parts.push(part);
-        }
-        const bytes = new Uint8Array(length);
-        let cursor = 0;
-        for (const part of parts) {
-          bytes.set(part, cursor);
-          cursor += part.length;
-        }
-        return sha256Hex(bytes);
+  try {
+    return await core.createAndVerifyGpuModelDocument(
+      document,
+      {
+        async digestSha256(chunks) {
+          const parts: Uint8Array[] = [];
+          let length = 0;
+          for await (const part of chunks) {
+            length += part.byteLength;
+            if (length > 480000) invalid();
+            parts.push(part);
+          }
+          const bytes = new Uint8Array(length);
+          let cursor = 0;
+          for (const part of parts) {
+            bytes.set(part, cursor);
+            cursor += part.length;
+          }
+          return sha256Hex(bytes);
+        },
+        async inspectResource(chunks) {
+          for await (const _part of chunks)
+            if (signal.aborted) throw new FbxImportError("aborted");
+          return { valid: true, detectedMimeType: "application/octet-stream" };
+        },
       },
-      async inspectResource(chunks) {
-        for await (const _part of chunks)
-          if (signal.aborted) throw new FbxImportError("aborted");
-        return { valid: true, detectedMimeType: "application/octet-stream" };
+      {
+        signal,
+        limits: {
+          maxResourceBytes: 480000,
+          maxAggregateBytes: 6600000,
+          timeoutMs: 10000,
+        },
       },
-    },
-    {
-      signal,
-      limits: {
-        maxResourceBytes: 480000,
-        maxAggregateBytes: 5520000,
-        timeoutMs: 10000,
-      },
-    },
-  );
+    );
+  } catch (error) {
+    if (
+      error instanceof core.GpuModelDocumentError &&
+      error.code === "limit-exceeded"
+    )
+      throw new FbxImportError("limit-exceeded");
+    throw error;
+  }
 }
