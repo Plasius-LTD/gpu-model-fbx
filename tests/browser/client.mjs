@@ -32,7 +32,9 @@ async function run() {
     check(active === 0, "Worker retained after successful import"); checks.push(key);
   }
   const fetched = await importer.load({ kind: "url", url: location.origin + "/triangle.fbx" }); check(fetched.meshes.length === 1, "Runtime URL acquisition"); checks.push("bounded-url-acquisition");
-  await rejects(importer.load({ kind: "uint8-array", bytes: new Uint8Array(fixture.quad) }), "unsupported-profile");
+  const {checkGeometry}=await import("./geometry.mjs");checks.push(...await checkGeometry(importer,fixture,check));
+  const quad=await importer.load({kind:"uint8-array",bytes:new Uint8Array(fixture.quad)});check(quad.accessors[0].count===6,"Polygon triangulation");checks.push("polygon-triangulation");
+  await rejects(importer.load({kind:"uint8-array",bytes:new Uint8Array(fixture.unsupported)}),"unsupported-profile");
   await rejects(importer.load({ kind: "uint8-array", bytes: new Uint8Array(fixture.binary).slice(0, 100) }), "invalid-fbx");
   await rejects(importer.load({ kind: "uint8-array", bytes: new Uint8Array(fixture.adversarial) }), "invalid-fbx"); checks.push("malformed-unsupported-decompression-rejected");
   await rejects(importer.load({ kind: "uint8-array", bytes: new Uint8Array(fixture.expanded) }), "limit-exceeded"); checks.push("consistent-expanded-array-bounded");

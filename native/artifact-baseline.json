@@ -34,11 +34,11 @@
     "-sEXPORT_ES6=1",
     "-sSINGLE_FILE=1",
     "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPF32,HEAPF64",
-    "-sEXPORTED_FUNCTIONS=_malloc,_free,_fbx_parse,_fbx_header,_fbx_output,_fbx_name,_fbx_name_size,_fbx_outstanding",
+    "-sEXPORTED_FUNCTIONS=_malloc,_free,_fbx_parse,_fbx_header,_fbx_output,_fbx_normals,_fbx_uvs,_fbx_nodes,_fbx_primitives,_fbx_materials,_fbx_node_names,_fbx_material_names,_fbx_mesh_names,_fbx_material_shaders,_fbx_outstanding",
     "-o",
     "ufbx.mjs"
   ],
-  "bridgeSha256": "6eb730bea5c668a247ebfcddd439316949a8bd7d21c11b1ea0215c97f7ce4e0d",
-  "glueSha256": "27666bd2b49cb71141c7177b4d8af75fe71baf2412483cb7eb0dfd668dd8af8c",
-  "wasmSha256": "0ce8ba35bd2edf29091c17938dd7a0122d42712ac3cc460b47a142e250087ca7"
+  "bridgeSha256": "438b98482b215de0334de7427baab479eca17616d7e4d0648d1bf839674baa7a",
+  "glueSha256": "e078dced03f045ba03b88e1d294cd2cb7aaf0dc58f10390694be0abf87daffbe",
+  "wasmSha256": "dec8ec9d4bccf2fba9160cd43d3415910855d59176469457ba367f4ecef955fd"
 }

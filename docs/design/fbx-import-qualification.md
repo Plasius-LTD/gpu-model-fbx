@@ -1,5 +1,7 @@
 # FBX bounded import qualification
 
+Historical Task23 boundary qualification; expanded by
+[the Task24 static scene profile](fbx-static-scene-qualification.md).
 Task23 / Feature1151. Profile: `plasius.fbx-static-triangles/1`.
 This profile implements the parser/resource boundary; tasks24–30 retain broader
 geometry/material/hierarchy, rig/morph/animation/resource/export and repair work.

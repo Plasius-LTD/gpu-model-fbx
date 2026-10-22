@@ -3,8 +3,9 @@
 Date: 2026-10-21. Decision: [ADR 0006](../adrs/adr-0006-fbx-dependency-and-licensing-strategy.md).
 Parent Feature: site 1151. Bootstrap: site 1167/package 22.
 Existing [coordinator 1](https://github.com/Plasius-LTD/gpu-model-fbx/issues/1)
-keeps its complete adapter acceptance. This document defines future work; no
-parser, exporter or WASM payload is implemented in this release.
+keeps its complete adapter acceptance. This records the original dependency plan from bootstrap22. Task23 established
+the bounded import profile; Task24 extends static scene fidelity. Remaining
+rig/resource/animation/export/conformance tasks retain their own delivery gates.
 
 ## Work packages and dependency order
 
@@ -109,3 +110,12 @@ Retain the bootstrap status in public APIs until a separate implemented profile
 is qualified. The feature flag is an implementation gate, not a claim of an
 already-shipped converter. Rollback uses its remote decision and a qualified
 pinned package; no new local environment control or backend deployment applies.
+
+## Task24 static scene implementation
+
+Task24 implements the profile and bounds in [ADR0008](../adrs/adr-0008-static-scene-fidelity.md)
+and [the static scene qualification](../design/fbx-static-scene-qualification.md).
+Core0.6.0 already represents effective matrices, source metadata, attributes and
+loss ledgers; no owning-package extension is required. Renderer0.4.0 is pinned
+as a development-only consumer check; existing runtime dependencies do not change.
+Task24 completion does not complete tasks25–30 or Feature1151/coordinator1.
